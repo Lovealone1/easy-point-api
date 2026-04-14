@@ -40,12 +40,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const exceptionResponse: any = exception.getResponse();
       
-      this.logger.warn(`[Validation Error] [TraceID: ${traceId}] HTTP ${status}: ${exceptionResponse.message || exception.message}`);
+      const isFavicon = request.url.includes('favicon.ico');
+      
+      if (!isFavicon) {
+        this.logger.warn(`[Validation Error] [TraceID: ${traceId}] HTTP ${status}: ${exceptionResponse.message || exception.message}`);
+      }
 
       return response.status(status).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
+          code: status === 404 ? 'NOT_FOUND' : 'VALIDATION_ERROR',
           message: exceptionResponse.message || exception.message,
           details: { traceId },
         },
