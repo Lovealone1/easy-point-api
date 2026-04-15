@@ -7,7 +7,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter.
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { RedocModule, RedocOptions } from 'nestjs-redoc';
 import appConfig from './common/config/config.js';
-import { REDIS_CLIENT } from './common/redis/redis.constants.js';
+import { REDIS_CLIENT } from './infraestructure/redis/redis.constants.js';
 
 async function bootstrap() {
   const appLogger = new AppLogger();

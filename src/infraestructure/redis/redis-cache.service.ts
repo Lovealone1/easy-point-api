@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
-import appConfig from '../config/config.js';
+import appConfig from '../../common/config/config.js';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from './redis.constants.js';
 
@@ -11,7 +11,7 @@ export class RedisCacheService {
     private readonly config: ConfigType<typeof appConfig>,
     @Inject(REDIS_CLIENT)
     private readonly redisClient: Redis,
-  ) {}
+  ) { }
 
   async get<T>(key: string): Promise<T | null> {
     const cachedValue = await this.redisClient.get(key);

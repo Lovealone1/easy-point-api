@@ -5,6 +5,7 @@ import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
 import { RateLimitMiddleware } from './common/middlewares/rate-limit.middleware.js';
 import { RedisModule } from './infraestructure/redis/redis.module.js';
 import appConfig from './common/config/config.js';
+import { MailService } from './infraestructure/mail/mail.service.js';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import appConfig from './common/config/config.js';
     RedisModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [MailService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

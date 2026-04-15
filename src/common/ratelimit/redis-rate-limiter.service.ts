@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
 import type { RateLimitTierConfig } from '../config/config.js';
-import { REDIS_CLIENT } from '../redis/redis.constants.js';
+import { REDIS_CLIENT } from '../../infraestructure/redis/redis.constants.js';
 import { LimitInfo, RateLimiter } from './rate-limiter.interface.js';
 
 @Injectable()

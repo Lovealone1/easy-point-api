@@ -9,8 +9,8 @@ import {
 import { ConfigModule } from '@nestjs/config';
 import type { ConfigType } from '@nestjs/config';
 import Redis, { RedisOptions } from 'ioredis';
-import appConfig from '../config/config.js';
-import { RateLimitersService } from '../ratelimit/rate-limiters.service.js';
+import appConfig from '../../common/config/config.js';
+import { RateLimitersService } from '../../common/ratelimit/rate-limiters.service.js';
 import { REDIS_CLIENT } from './redis.constants.js';
 import { RedisCacheService } from './redis-cache.service.js';
 
