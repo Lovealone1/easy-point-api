@@ -1,9 +1,11 @@
 import { NestFactory } from '@nestjs/core';
+import type { ConfigType } from '@nestjs/config';
 import { AppModule } from './app.module.js';
 import { AppLogger } from './common/logger/app.logger.js';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { RedocModule, RedocOptions } from 'nestjs-redoc';
+import appConfig from './infraestructure/config/config.js';
 
 async function bootstrap() {
   const appLogger = new AppLogger();
@@ -22,14 +24,14 @@ async function bootstrap() {
   });
   app.setGlobalPrefix('api');
 
-  const config = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('Easy Point API')
     .setDescription('Core ERP Multitenant - API Reference')
     .setVersion('1.0.0')
     .addBearerAuth()
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
   
   const redocOptions: RedocOptions = {
     title: 'Easy Point API Docs',
@@ -47,8 +49,9 @@ async function bootstrap() {
 
   await RedocModule.setup('/api/docs', app, document, redocOptions);
 
-  const port = process.env.PORT || 3000;
-  const appUrl = process.env.APP_URL || `http://localhost:${port}`;
+  const runtimeConfig = app.get<ConfigType<typeof appConfig>>(appConfig.KEY);
+  const port = runtimeConfig.app.port;
+  const appUrl = runtimeConfig.app.apiBaseUrl.replace(/\/api$/, '');
 
   await app.listen(port);
 
