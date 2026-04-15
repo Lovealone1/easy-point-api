@@ -4,7 +4,7 @@ import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
 import { RateLimitMiddleware } from './common/middlewares/rate-limit.middleware.js';
 import { RedisModule } from './infraestructure/redis/redis.module.js';
-import appConfig from './infraestructure/config/config.js';
+import appConfig from './common/config/config.js';
 
 @Module({
   imports: [

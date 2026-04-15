@@ -9,8 +9,8 @@ import { NextFunction, Request, Response } from 'express';
 import type {
   LimitInfo,
   RateLimiter,
-} from '../../infraestructure/ratelimit/rate-limiter.interface.js';
-import { RateLimitersService } from '../../infraestructure/ratelimit/rate-limiters.service.js';
+} from '../ratelimit/rate-limiter.interface.js';
+import { RateLimitersService } from '../ratelimit/rate-limiters.service.js';
 
 type RequestWithUser = Request & {
   user?: {
@@ -25,7 +25,7 @@ export class RateLimitMiddleware implements NestMiddleware {
 
   constructor(
     private readonly rateLimitersService: RateLimitersService,
-  ) {}
+  ) { }
 
   async use(
     request: RequestWithUser,

@@ -2,7 +2,7 @@ import { Inject, Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import type { ConfigType } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import appConfig from '../infraestructure/config/config.js';
+import appConfig from '../common/config/config.js';
 
 @Injectable()
 export class PrismaService
