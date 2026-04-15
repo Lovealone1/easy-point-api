@@ -6,8 +6,11 @@ import {
   NestMiddleware,
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
-import type { LimitInfo, RateLimiter } from '@/infraestructure/ratelimit/rate-limiter.interface.js';
-import { RateLimitersService } from '@/infraestructure/ratelimit/rate-limiters.service.js';
+import type {
+  LimitInfo,
+  RateLimiter,
+} from '../../infraestructure/ratelimit/rate-limiter.interface.js';
+import { RateLimitersService } from '../../infraestructure/ratelimit/rate-limiters.service.js';
 
 type RequestWithUser = Request & {
   user?: {

@@ -4,14 +4,13 @@ import {
   Inject,
   Logger,
   Module,
-  OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import type { ConfigType } from '@nestjs/config';
 import Redis, { RedisOptions } from 'ioredis';
-import appConfig from '@/infraestructure/config/config.js';
-import { RateLimitersService } from '@/infraestructure/ratelimit/rate-limiters.service.js';
+import appConfig from '../config/config.js';
+import { RateLimitersService } from '../ratelimit/rate-limiters.service.js';
 import { REDIS_CLIENT } from './redis.constants.js';
 import { RedisCacheService } from './redis-cache.service.js';
 
@@ -47,7 +46,7 @@ const redisClientProvider: FactoryProvider<Redis> = {
   exports: [REDIS_CLIENT, RedisCacheService, RateLimitersService],
 })
 export class RedisModule
-  implements OnApplicationBootstrap, OnApplicationShutdown {
+  implements OnApplicationShutdown {
   private readonly logger = new Logger(RedisModule.name);
   private readonly redisErrorHandler = (error: Error) => {
     this.logger.error(`Redis connection error: ${error.message}`, error.stack);
@@ -71,22 +70,6 @@ export class RedisModule
     });
 
     this.redisClient.on('error', this.redisErrorHandler);
-  }
-
-  async onApplicationBootstrap(): Promise<void> {
-    if (!this.redisConfig.enabled) {
-      this.logger.warn('Redis is disabled by configuration');
-      return;
-    }
-
-    if (this.redisClient.status === 'wait') {
-      await this.redisClient.connect();
-      return;
-    }
-
-    if (this.redisClient.status !== 'ready' && this.redisClient.status !== 'connect') {
-      await this.redisClient.connect();
-    }
   }
 
   async onApplicationShutdown(): Promise<void> {

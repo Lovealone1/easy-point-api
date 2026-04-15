@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
 import { RateLimitMiddleware } from './common/middlewares/rate-limit.middleware.js';
 import { RedisModule } from './infraestructure/redis/redis.module.js';
@@ -19,6 +20,8 @@ import appConfig from './infraestructure/config/config.js';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggerMiddleware, RateLimitMiddleware).forRoutes('{*path}');
+    consumer
+      .apply(JsonBodyMiddleware, LoggerMiddleware, RateLimitMiddleware)
+      .forRoutes('{*path}');
   }
 }
