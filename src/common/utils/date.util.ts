@@ -1,26 +1,26 @@
 /**
  * Colombian-timezone (America/Bogota, UTC-5) helpers.
  *
- * Utilizados ESTRICTAMENTE para lógica de negocio, validaciones y
- * formateo de display.
+ * STRICTLY used for business logic, validations, and
+ * display formatting.
  * 
- * ATENCIÓN: No usar estas funciones para sobreescribir los 
- * campos createdAt/updatedAt de Prisma. Deja que Prisma use UTC real.
+ * WARNING: Do not use these functions to overwrite Prisma 
+ * createdAt/updatedAt fields. Let Prisma use real UTC.
  */
 
 const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000; // UTC-5
 
 /**
- * Función PRIVADA para obtener un Date desplazado.
- * NUNCA debe guardarse directamente en Prisma, solo sirve 
- * para extraer año, mes y día de forma segura.
+ * PRIVATE function to get an offset Date.
+ * NEVER save this directly in Prisma. It is only used 
+ * to safely extract the year, month, and day.
  */
 function getShiftedColombiaDate(realDate: Date = new Date()): Date {
   return new Date(realDate.getTime() + COLOMBIA_OFFSET_MS);
 }
 
 /**
- * Retorna la fecha de hoy en Colombia como un string `YYYY-MM-DD`.
+ * Returns today's date in Colombia as a `YYYY-MM-DD` string.
  */
 export function todayColombia(): string {
   const now = getShiftedColombiaDate();
@@ -31,10 +31,10 @@ export function todayColombia(): string {
 }
 
 /**
- * Retorna la fecha de mañana en Colombia como un string `YYYY-MM-DD`.
+ * Returns tomorrow's date in Colombia as a `YYYY-MM-DD` string.
  */
 export function tomorrowColombia(): string {
-  // Sumamos 24h a la fecha actual real, y luego la desplazamos a Colombia
+  // Add 24h to the current real date, then shift it to Colombia
   const realTomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const tomorrow = getShiftedColombiaDate(realTomorrow);
   
@@ -45,9 +45,9 @@ export function tomorrowColombia(): string {
 }
 
 /**
- * Retorna el inicio del día local en formato Date (UTC puro).
- * Excelente para queries de Prisma donde necesites filtrar "todo lo de hoy".
- * Ej: buscar reservas donde `createdAt >= startOfDayColombia()`
+ * Returns the start of the local day in Date format (pure UTC).
+ * Excellent for Prisma queries where you need to filter "everything from today".
+ * Ex: search for reservations where `createdAt >= startOfDayColombia()`
  */
 export function startOfDayColombia(dateStr?: string): Date {
   const targetDate = dateStr ? new Date(dateStr) : getShiftedColombiaDate();
@@ -55,16 +55,16 @@ export function startOfDayColombia(dateStr?: string): Date {
   const m = targetDate.getUTCMonth();
   const d = targetDate.getUTCDate();
   
-  // Creamos la fecha a las 00:00:00 en UTC, y luego REVERTIMOS el offset
-  // para obtener el momento UTC exacto en el que empezó el día en Colombia.
+  // Create the date at 00:00:00 in UTC, and then REVERSE the offset
+  // to get the exact UTC moment the day started in Colombia.
   const startOfLocalDayUTC = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
   return new Date(startOfLocalDayUTC.getTime() - COLOMBIA_OFFSET_MS);
 }
 
 /**
- * Retorna el fin del día local en formato Date (UTC puro).
- * Excelente para queries de Prisma donde necesites un límite superior.
- * Ej: buscar reservas donde `createdAt <= endOfDayColombia()`
+ * Returns the end of the local day in Date format (pure UTC).
+ * Excellent for Prisma queries where you need an upper boundary.
+ * Ex: search for reservations where `createdAt <= endOfDayColombia()`
  */
 export function endOfDayColombia(dateStr?: string): Date {
   const targetDate = dateStr ? new Date(dateStr) : getShiftedColombiaDate();
@@ -72,23 +72,24 @@ export function endOfDayColombia(dateStr?: string): Date {
   const m = targetDate.getUTCMonth();
   const d = targetDate.getUTCDate();
   
-  // 23:59:59.999 en UTC
+  // 23:59:59.999 in UTC
   const endOfLocalDayUTC = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
   return new Date(endOfLocalDayUTC.getTime() - COLOMBIA_OFFSET_MS);
 }
 
 /**
- * Verifica si un string `YYYY-MM-DD` pertenece al pasado 
- * respecto al día actual en Colombia.
+ * Checks if a `YYYY-MM-DD` string is in the past 
+ * compared to the current day in Colombia.
  */
 export function isDateInPastColombia(dateStr: string): boolean {
   return dateStr < todayColombia();
 }
 
 /**
- * Verifica si un string `YYYY-MM-DD` es el día de mañana o después
- * respecto al día actual en Colombia.
+ * Checks if a `YYYY-MM-DD` string is tomorrow or later
+ * compared to the current day in Colombia.
  */
 export function isDateTomorrowOrLaterColombia(dateStr: string): boolean {
   return dateStr >= tomorrowColombia();
 }
+
