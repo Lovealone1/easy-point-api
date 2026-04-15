@@ -1,6 +1,8 @@
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { ConfigType } from '@nestjs/config';
 import Redis from 'ioredis';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { AppLogger } from './common/logger/app.logger.js';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
@@ -19,6 +21,17 @@ async function bootstrap() {
 
   app.useLogger(appLogger);
   app.useGlobalFilters(new GlobalExceptionFilter());
+  app.use(helmet());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  );
 
   app.enableCors({
     origin: '*',
