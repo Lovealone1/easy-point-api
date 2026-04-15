@@ -49,6 +49,9 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
 
+  // Expose Swagger UI for realtime testing
+  SwaggerModule.setup('/api/swagger', app, document);
+
   const redocOptions: RedocOptions = {
     title: 'Easy Point API Docs',
     sortPropsAlphabetically: true,
@@ -63,6 +66,7 @@ async function bootstrap() {
     }
   };
 
+  // Expose Redoc for detailed static documentation
   await RedocModule.setup('/api/docs', app, document, redocOptions);
 
   const runtimeConfig = app.get<ConfigType<typeof appConfig>>(appConfig.KEY);
@@ -101,6 +105,7 @@ async function bootstrap() {
   await app.listen(port);
 
   appLogger.success(`🚀 API is successfully running on ${appUrl}/api`);
+  appLogger.debug(`📚 Swagger UI available on ${appUrl}/api/swagger`);
   appLogger.debug(`📚 Redoc Documentation available on ${appUrl}/api/docs`);
 }
 

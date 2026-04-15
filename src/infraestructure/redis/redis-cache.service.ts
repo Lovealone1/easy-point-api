@@ -39,6 +39,24 @@ export class RedisCacheService {
     await this.redisClient.del(key);
   }
 
+  async sadd(key: string, value: string): Promise<void> {
+    await this.redisClient.sadd(key, value);
+  }
+
+  async srem(key: string, value: string): Promise<void> {
+    await this.redisClient.srem(key, value);
+  }
+
+  async smembers(key: string): Promise<string[]> {
+    return this.redisClient.smembers(key);
+  }
+
+  async mget<T>(keys: string[]): Promise<(T | null)[]> {
+    if (keys.length === 0) return [];
+    const results = await this.redisClient.mget(...keys);
+    return results.map(val => (val ? this.deserialize<T>(val) : null));
+  }
+
   private serialize(value: any): string {
     return JSON.stringify(value);
   }
@@ -49,5 +67,16 @@ export class RedisCacheService {
     } catch {
       return value as T;
     }
+  }
+
+  async incr(key: string, ttlSeconds?: number): Promise<number> {
+    const newValue = await this.redisClient.incr(key);
+    
+    // If it's a new key and TTL is provided, set the expiration
+    if (newValue === 1 && ttlSeconds && ttlSeconds > 0) {
+      await this.redisClient.expire(key, ttlSeconds);
+    }
+    
+    return newValue;
   }
 }
