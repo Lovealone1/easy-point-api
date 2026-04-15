@@ -29,6 +29,11 @@ export class RateLimitMiddleware implements NestMiddleware {
     response: Response,
     next: NextFunction,
   ): Promise<void> {
+    if (this.shouldBypass(request)) {
+      next();
+      return;
+    }
+
     try {
       const globalLimiter = this.rateLimitersService.global;
       const scopedLimiter = this.resolveScopedLimiter(request);
@@ -142,6 +147,17 @@ export class RateLimitMiddleware implements NestMiddleware {
       .replace(/\//g, ':');
 
     return sanitizedPath || 'root';
+  }
+
+  private shouldBypass(request: RequestWithUser): boolean {
+    const requestPath = (request.originalUrl || request.path || '').split('?')[0];
+
+    return (
+      requestPath === '/api/docs' ||
+      requestPath.startsWith('/api/docs/') ||
+      requestPath === '/docs' ||
+      requestPath.startsWith('/docs/')
+    );
   }
 
   private isReadOperation(request: RequestWithUser): boolean {

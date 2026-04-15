@@ -1,10 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
+import appConfig from '@/infraestructure/config/config.js';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from './redis.constants.js';
 
 @Injectable()
 export class RedisCacheService {
   constructor(
+    @Inject(appConfig.KEY)
+    private readonly config: ConfigType<typeof appConfig>,
     @Inject(REDIS_CLIENT)
     private readonly redisClient: Redis,
   ) {}
@@ -21,9 +25,10 @@ export class RedisCacheService {
 
   async set(key: string, value: any, ttlSeconds?: number): Promise<void> {
     const serializedValue = this.serialize(value);
+    const effectiveTtlSeconds = ttlSeconds ?? this.config.redis.ttlSeconds;
 
-    if (ttlSeconds && ttlSeconds > 0) {
-      await this.redisClient.set(key, serializedValue, 'EX', ttlSeconds);
+    if (effectiveTtlSeconds > 0) {
+      await this.redisClient.set(key, serializedValue, 'EX', effectiveTtlSeconds);
       return;
     }
 
