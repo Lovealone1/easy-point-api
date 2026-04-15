@@ -13,7 +13,7 @@ const DURATION_MULTIPLIERS: Record<DurationUnit, number> = {
   d: 24 * 60 * 60 * MILLISECONDS_IN_SECOND,
 };
 
-interface RateLimitTierConfig {
+export interface RateLimitTierConfig {
   requestsPerWindow: number;
   windowMs: number;
 }

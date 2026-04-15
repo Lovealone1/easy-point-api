@@ -11,6 +11,7 @@ import { ConfigModule } from '@nestjs/config';
 import type { ConfigType } from '@nestjs/config';
 import Redis, { RedisOptions } from 'ioredis';
 import appConfig from '@/infraestructure/config/config.js';
+import { RateLimitersService } from '@/infraestructure/ratelimit/rate-limiters.service.js';
 import { REDIS_CLIENT } from './redis.constants.js';
 import { RedisCacheService } from './redis-cache.service.js';
 
@@ -38,8 +39,12 @@ const redisClientProvider: FactoryProvider<Redis> = {
 @Global()
 @Module({
   imports: [ConfigModule],
-  providers: [redisClientProvider, RedisCacheService],
-  exports: [REDIS_CLIENT, RedisCacheService],
+  providers: [
+    redisClientProvider,
+    RedisCacheService,
+    RateLimitersService,
+  ],
+  exports: [REDIS_CLIENT, RedisCacheService, RateLimitersService],
 })
 export class RedisModule
   implements OnApplicationBootstrap, OnApplicationShutdown {
