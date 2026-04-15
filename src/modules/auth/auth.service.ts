@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, ForbiddenException, UnauthorizedException, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { GlobalRole } from '@prisma/client';
 import type { ConfigType } from '@nestjs/config';
 import appConfig from '../../common/config/config.js';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
@@ -185,7 +186,7 @@ export class AuthService {
     // In verifyOtp we currently only return accessToken (stateless).
     // We need to replace that with the stateful token generation.
     const user = await this.prismaService.user.findUnique({ where: { email: payload.email } });
-    const { accessToken } = await this.generateAuthTokens(user!.id, user!.email, metadata);
+    const { accessToken } = await this.generateAuthTokens(user!.id, user!.email, user!.globalRole!, metadata);
 
     return {
       ...result,
@@ -208,7 +209,7 @@ export class AuthService {
       }
 
       this.logger.log(`Renewing access token for ${user.email}`);
-      const tokens = await this.generateAuthTokens(user.id, user.email, {
+      const tokens = await this.generateAuthTokens(user.id, user.email, user.globalRole!, {
         ip: decoded.ip || 'unknown',
         userAgent: decoded.userAgent || 'unknown'
       });
@@ -301,9 +302,16 @@ export class AuthService {
     return { message: 'Session terminated successfully' };
   }
 
-  private async generateAuthTokens(userId: string, email: string, metadata: { ip: string; userAgent: string }) {
+  private async generateAuthTokens(userId: string, email: string, role: GlobalRole, metadata: { ip: string; userAgent: string }) {
     const sid = crypto.randomUUID();
-    const jwtPayload = { sub: userId, email, sid, ip: metadata.ip, userAgent: metadata.userAgent };
+    const jwtPayload = { 
+      sub: userId, 
+      email, 
+      role,
+      sid, 
+      ip: metadata.ip, 
+      userAgent: metadata.userAgent 
+    };
 
     // Set TTL to 7 days (matching refresh token)
     const ttlSeconds = 7 * 24 * 60 * 60;
