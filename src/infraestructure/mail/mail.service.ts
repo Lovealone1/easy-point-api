@@ -14,9 +14,10 @@ export class MailService {
     @Inject(appConfig.KEY)
     private readonly config: ConfigType<typeof appConfig>,
   ) {
-    const { host, port, user, password } = this.config.smtp;
+    const { host, port, user, password, from } = this.config.smtp;
 
-    this.from = user;
+    // We interpolate the "Alias" alongside the validated email from SMTP_FROM
+    this.from = `"Equipo de Seguridad Easy Point" <${from}>`;
     this.transporter = nodemailer.createTransport({
       host,
       port,

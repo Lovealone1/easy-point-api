@@ -40,6 +40,7 @@ interface AppConfigShape {
     port: number;
     user: string;
     password: string;
+    from: string;
   };
   redis: {
     enabled: boolean;
@@ -57,6 +58,12 @@ interface AppConfigShape {
     moderateIp: RateLimitTierConfig;
     readOps: RateLimitTierConfig;
     writeOps: RateLimitTierConfig;
+  };
+  jwt: {
+    secret: string;
+    expiresIn: string;
+    refreshSecret: string;
+    refreshExpiresIn: string;
   };
 }
 
@@ -150,6 +157,7 @@ export default registerAs('app', (): AppConfig => ({
     port: getNumber('SMTP_PORT', 587),
     user: getString('SMTP_USER'),
     password: getString('SMTP_PASSWORD'),
+    from: getString('SMTP_FROM', getString('SMTP_USER')),
   },
   redis: {
     enabled: getBoolean('REDIS_ENABLED', true),
@@ -192,5 +200,11 @@ export default registerAs('app', (): AppConfig => ({
       'RATE_LIMIT_WRITE_WINDOW',
       60 * MILLISECONDS_IN_SECOND,
     ),
+  },
+  jwt: {
+    secret: getString('JWT_SECRET', 'fallback_secreto_desarrollo_temporal'),
+    expiresIn: getString('JWT_EXPIRES_IN', '15m'),
+    refreshSecret: getString('JWT_REFRESH_SECRET', 'fallback_refresh_secreto_7X'),
+    refreshExpiresIn: getString('JWT_REFRESH_EXPIRES_IN', '7d'),
   },
 }));

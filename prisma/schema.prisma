@@ -6,13 +6,60 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  OWNER
+  ADMINISTRATOR
+  COLLABORATOR
+  USER
+}
+
+enum GlobalRole {
+  ADMIN
+  MODERATOR
+  USER
+}
+
 model User {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  firstName   String?
+  lastName    String?
+  phoneNumber String?
+  isActive    Boolean    @default(true)
+  globalRole  GlobalRole @default(USER)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organizations OrganizationUser[]
+
+  @@map("users")
+}
+
+model Organization {
   id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
+  name      String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("users")
+  members OrganizationUser[]
+
+  @@map("organizations")
+}
+
+model OrganizationUser {
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String
+  role           Role     @default(USER)
+  joinedAt       DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@map("organization_users")
 }
