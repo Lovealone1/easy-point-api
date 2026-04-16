@@ -76,7 +76,7 @@ export class AuthService {
 
     if (existingOtp) {
       this.logger.log(`Sending existing OTP for ${email} (${intent})`);
-      
+
       if (!isDevReturn) {
         await this.sendOtpMail(email, intent, existingOtp);
         return { message: 'OTP code sent via email' };
@@ -93,7 +93,7 @@ export class AuthService {
     await this.redisCacheService.set(cacheKey, newOtp, this.getOtpTtlSeconds());
 
     this.logger.log(`Generating new OTP for ${email} (${intent}): ${newOtp}`);
-    
+
     if (!isDevReturn) {
       await this.sendOtpMail(email, intent, newOtp);
       return { message: 'OTP code sent via email' };
@@ -152,7 +152,7 @@ export class AuthService {
     }
 
     if (!user!.isActive) {
-       throw new UnauthorizedException('User account is disabled');
+      throw new UnauthorizedException('User account is disabled');
     }
 
     // Update lastLoginAt if validation is successful
@@ -182,7 +182,7 @@ export class AuthService {
 
   async verifyOtpWithMetadata(payload: VerifyOtpDto, metadata: { ip: string; userAgent: string }) {
     const result = await this.verifyOtp(payload);
-    
+
     // In verifyOtp we currently only return accessToken (stateless).
     // We need to replace that with the stateful token generation.
     const user = await this.prismaService.user.findUnique({ where: { email: payload.email } });
@@ -243,7 +243,7 @@ export class AuthService {
 
     const updatedUser = await this.prismaService.user.update({
       where: { id: userId },
-      data: { 
+      data: {
         firstName: payload.firstName,
         lastName: payload.lastName,
         phoneNumber: payload.phoneNumber,
@@ -286,26 +286,23 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-<<<<<<< Updated upstream
-=======
   async logoutAll(userId: string) {
     const sessionIds = await this.redisCacheService.smembers(`user_sessions:${userId}`);
     if (sessionIds.length > 0) {
       const keysToDelete = sessionIds.map(sid => `session_metadata:${userId}:${sid}`);
       keysToDelete.push(`user_sessions:${userId}`);
-      
+
       await Promise.all(keysToDelete.map(key => this.redisCacheService.delete(key)));
     }
-    
+
     this.logger.log(`User ${userId} logged out from all devices`);
     return { message: 'Logged out from all devices successfully' };
   }
 
->>>>>>> Stashed changes
   async killSession(userId: string, sessionIdToKill: string) {
     const sessionKey = `session_metadata:${userId}:${sessionIdToKill}`;
     const exists = await this.redisCacheService.get(sessionKey);
-    
+
     if (!exists) {
       throw new NotFoundException(`Session with ID ${sessionIdToKill} not found`);
     }
@@ -320,13 +317,13 @@ export class AuthService {
 
   private async generateAuthTokens(userId: string, email: string, role: GlobalRole, metadata: { ip: string; userAgent: string }) {
     const sid = crypto.randomUUID();
-    const jwtPayload = { 
-      sub: userId, 
-      email, 
+    const jwtPayload = {
+      sub: userId,
+      email,
       role,
-      sid, 
-      ip: metadata.ip, 
-      userAgent: metadata.userAgent 
+      sid,
+      ip: metadata.ip,
+      userAgent: metadata.userAgent
     };
 
     // Set TTL to 7 days (matching refresh token)

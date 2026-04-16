@@ -11,7 +11,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('otp')
   @HttpCode(HttpStatus.OK)
@@ -68,8 +68,6 @@ export class AuthController {
     return this.authService.logout(userId, sessionId);
   }
 
-<<<<<<< Updated upstream
-=======
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -80,7 +78,6 @@ export class AuthController {
     return this.authService.logoutAll(userId);
   }
 
->>>>>>> Stashed changes
   @Delete('sessions/:sid')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
