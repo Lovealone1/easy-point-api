@@ -1,6 +1,8 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { OrganizationsModule } from './modules/organizations/organizations.module.js';
+import { OrganizationUsersModule } from './modules/organization-users/organization-users.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
@@ -20,6 +22,8 @@ import { MailService } from './infraestructure/mail/mail.service.js';
     RedisModule,
     PrismaModule,
     AuthModule,
+    OrganizationsModule,
+    OrganizationUsersModule,
   ],
   controllers: [],
   providers: [MailService],
