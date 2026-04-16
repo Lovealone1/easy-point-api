@@ -19,6 +19,18 @@ enum GlobalRole {
   USER
 }
 
+enum Plan {
+  FREE
+  BASIC
+  PREMIUM
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
 model User {
   id          String    @id @default(uuid())
   email       String    @unique
@@ -39,6 +51,10 @@ model User {
 model Organization {
   id        String   @id @default(uuid())
   name      String
+  slug      String?  @unique
+  email     String?
+  plan      Plan     @default(FREE)
+  status    OrganizationStatus @default(ACTIVE)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
