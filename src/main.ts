@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { ConfigType } from '@nestjs/config';
 import Redis from 'ioredis';
@@ -39,6 +39,11 @@ async function bootstrap() {
     credentials: true,
   });
   app.setGlobalPrefix('api');
+
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Easy Point API')

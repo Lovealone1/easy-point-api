@@ -72,6 +72,12 @@ export class RateLimitMiddleware implements NestMiddleware {
   }
 
   private resolveScopedLimiter(request: RequestWithUser): RateLimiter | null {
+    const routeScope = this.getRouteScope(request);
+
+    if (routeScope.startsWith('organizations')) {
+      return this.rateLimitersService.moderateIp;
+    }
+
     if (this.hasAuthenticatedUser(request)) {
       return this.isReadOperation(request)
         ? this.rateLimitersService.readOps

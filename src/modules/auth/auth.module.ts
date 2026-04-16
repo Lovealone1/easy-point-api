@@ -12,6 +12,7 @@ import { MailService } from '../../infraestructure/mail/mail.service.js';
   imports: [
     RedisModule,
     JwtModule.registerAsync({
+      global: true,
       inject: [appConfig.KEY],
       useFactory: (config: ConfigType<typeof appConfig>) => ({
         secret: config.jwt.secret,
