@@ -11,7 +11,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('otp')
   @HttpCode(HttpStatus.OK)
@@ -66,6 +66,16 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout', description: 'Invalidates the current session token.' })
   async logout(@CurrentUser('sub') userId: string, @CurrentUser('sid') sessionId: string) {
     return this.authService.logout(userId, sessionId);
+  }
+
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiTags('Auth')
+  @ApiOperation({ summary: 'Logout from all devices', description: 'Invalidates all active session tokens for the current user.' })
+  @ApiOkResponse({ description: 'Logged out from all devices successfully' })
+  async logoutAll(@CurrentUser('sub') userId: string) {
+    return this.authService.logoutAll(userId);
   }
 
   @Delete('sessions/:sid')
