@@ -54,6 +54,7 @@ model Organization {
   slug      String?  @unique
   email     String?
   plan      Plan     @default(FREE)
+  planActiveUntil DateTime?
   status    OrganizationStatus @default(ACTIVE)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())

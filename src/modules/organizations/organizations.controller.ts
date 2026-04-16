@@ -9,11 +9,15 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiTooManyRequestsResponse, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse } from '@nestjs/swagger';
+import { UpdateOrganizationPlanDto } from './dto/update-organization-plan.dto.js';
+import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
+import { PageDto } from '../../common/pagination/page.dto.js';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiTooManyRequestsResponse, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiProperty } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -38,10 +42,10 @@ export class OrganizationsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all organizations (Admin Only)' })
-  @ApiOkResponse({ description: 'List of all organizations.' })
+  @ApiOkResponse({ description: 'List of all organizations paginated.', type: PageDto })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
-  findAll() {
-    return this.organizationsService.findAll();
+  findAll(@Query() pageOptionsDto: PageOptionsDto) {
+    return this.organizationsService.findAll(pageOptionsDto);
   }
 
   @Get(':id')
@@ -63,6 +67,18 @@ export class OrganizationsController {
     @Body() updateOrganizationDto: UpdateOrganizationDto,
   ) {
     return this.organizationsService.update(id, updateOrganizationDto);
+  }
+
+  @Patch(':id/plan')
+  @ApiOperation({ summary: 'Update organization plan and active date (Admin Only)' })
+  @ApiOkResponse({ description: 'Organization plan successfully updated.' })
+  @ApiNotFoundResponse({ description: 'Organization not found.' })
+  @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
+  updatePlan(
+    @Param('id') id: string,
+    @Body() updatePlanDto: UpdateOrganizationPlanDto,
+  ) {
+    return this.organizationsService.updatePlan(id, updatePlanDto);
   }
 
   @Delete(':id')
