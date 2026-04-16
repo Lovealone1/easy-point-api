@@ -68,6 +68,19 @@ export class AuthController {
     return this.authService.logout(userId, sessionId);
   }
 
+<<<<<<< Updated upstream
+=======
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiTags('Auth')
+  @ApiOperation({ summary: 'Logout from all devices', description: 'Invalidates all active session tokens for the current user.' })
+  @ApiOkResponse({ description: 'Logged out from all devices successfully' })
+  async logoutAll(@CurrentUser('sub') userId: string) {
+    return this.authService.logoutAll(userId);
+  }
+
+>>>>>>> Stashed changes
   @Delete('sessions/:sid')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

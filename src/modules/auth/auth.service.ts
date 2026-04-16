@@ -286,6 +286,22 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
+<<<<<<< Updated upstream
+=======
+  async logoutAll(userId: string) {
+    const sessionIds = await this.redisCacheService.smembers(`user_sessions:${userId}`);
+    if (sessionIds.length > 0) {
+      const keysToDelete = sessionIds.map(sid => `session_metadata:${userId}:${sid}`);
+      keysToDelete.push(`user_sessions:${userId}`);
+      
+      await Promise.all(keysToDelete.map(key => this.redisCacheService.delete(key)));
+    }
+    
+    this.logger.log(`User ${userId} logged out from all devices`);
+    return { message: 'Logged out from all devices successfully' };
+  }
+
+>>>>>>> Stashed changes
   async killSession(userId: string, sessionIdToKill: string) {
     const sessionKey = `session_metadata:${userId}:${sessionIdToKill}`;
     const exists = await this.redisCacheService.get(sessionKey);
