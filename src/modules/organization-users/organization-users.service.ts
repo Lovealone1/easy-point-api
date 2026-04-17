@@ -42,9 +42,13 @@ export class OrganizationUsersService {
     const take = pageOptionsDto.limit;
     
     const orderDirection = pageOptionsDto.order ? (pageOptionsDto.order.toLowerCase() as Prisma.SortOrder) : 'desc';
-    const orderBy: Prisma.OrganizationUserOrderByWithRelationInput = pageOptionsDto.orderBy 
-      ? ({ [pageOptionsDto.orderBy]: orderDirection } as Prisma.OrganizationUserOrderByWithRelationInput) 
-      : { joinedAt: 'desc' };
+    
+    // Map default 'createdAt' from PageOptionsDto to 'joinedAt' since OrganizationUser model uses joinedAt
+    const orderByField = pageOptionsDto.orderBy === 'createdAt' ? 'joinedAt' : (pageOptionsDto.orderBy || 'joinedAt');
+    
+    const orderBy: Prisma.OrganizationUserOrderByWithRelationInput = { 
+      [orderByField]: orderDirection 
+    };
 
     const where: Prisma.OrganizationUserWhereInput = {
       organizationId,
