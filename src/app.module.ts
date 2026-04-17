@@ -8,6 +8,7 @@ import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
 import { RequestInfoMiddleware } from './common/middlewares/request-info.middleware.js';
 import { RateLimitMiddleware } from './common/middlewares/rate-limit.middleware.js';
+import { TenantMiddleware } from './common/middlewares/tenant.middleware.js';
 import { RedisModule } from './infraestructure/redis/redis.module.js';
 import appConfig from './common/config/config.js';
 import { MailService } from './infraestructure/mail/mail.service.js';
@@ -35,6 +36,7 @@ export class AppModule implements NestModule {
         JsonBodyMiddleware,
         RequestInfoMiddleware,
         LoggerMiddleware,
+        TenantMiddleware,
         RateLimitMiddleware,
       )
       .forRoutes('{*path}');

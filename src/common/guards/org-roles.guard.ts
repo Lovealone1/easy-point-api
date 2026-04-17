@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { Role, OrganizationStatus, GlobalRole } from '@prisma/client';
 import { ORG_ROLES_KEY } from '../decorators/org-roles.decorator.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { getTenantId } from '../context/tenant.context.js';
 
 @Injectable()
 export class OrgRolesGuard implements CanActivate {
@@ -39,30 +40,7 @@ export class OrgRolesGuard implements CanActivate {
       throw new UnauthorizedException('User identification is missing from the authentication payload');
     }
 
-    let organizationId =
-      request.params.organizationId ||
-      request.params.orgId ||
-      request.query?.organizationId ||
-      request.headers['x-organization-id'] ||
-      request.body?.organizationId;
-
-    if (!organizationId && request.params.id) {
-      // Smart resolution: if the endpoint is within 'organization-users' domain, the 'id' param 
-      // is likely the OrganizationUser's ID, not the Organization's ID.
-      if (request.originalUrl?.includes('/organization-users')) {
-        const orgUserRecord = await this.prisma.organizationUser.findUnique({
-          where: { id: request.params.id },
-          select: { organizationId: true }
-        });
-        if (orgUserRecord) {
-          organizationId = orgUserRecord.organizationId;
-        } else {
-          throw new BadRequestException('The specified organization user does not exist or its organization could not be resolved');
-        }
-      } else {
-        organizationId = request.params.id;
-      }
-    }
+    const organizationId = getTenantId();
 
     if (!organizationId) {
       throw new BadRequestException('Organization identifier could not be inferred from params, body, or headers');
