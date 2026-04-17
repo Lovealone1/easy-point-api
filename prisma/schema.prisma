@@ -60,7 +60,8 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members OrganizationUser[]
+  members     OrganizationUser[]
+  invitations Invitation[]
 
   @@map("organizations")
 }
@@ -79,4 +80,31 @@ model OrganizationUser {
   @@index([userId])
   @@index([organizationId])
   @@map("organization_users")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id             String           @id @default(uuid())
+  email          String
+  token          String           @unique
+  role           Role
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([token])
+  @@index([email])
+  @@index([organizationId])
+  @@map("invitations")
 }
