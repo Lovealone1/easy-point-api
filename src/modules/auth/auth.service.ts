@@ -11,6 +11,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto.js';
 import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.template.js';
+import { InvitationsService } from '../invitations/invitations.service.js';
 import crypto from 'crypto';
 
 export interface SessionMetadata {
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly jwtService: JwtService,
     private readonly prismaService: PrismaService,
+    private readonly invitationsService: InvitationsService,
   ) { }
 
   async generateOtp(payload: GenerateOtpDto, isDevReturn: boolean = false) {
@@ -223,7 +225,67 @@ export class AuthService {
     }
   }
 
-  async completeRegistration(userId: string, authenticatedEmail: string, payload: CompleteRegistrationDto) {
+  async completeRegistration(
+    userId: string | null,
+    authenticatedEmail: string,
+    payload: CompleteRegistrationDto,
+  ) {
+    // ── FLOW A: Invitation bypass (new user, sub === null) ──────────────────
+    if (userId === null) {
+      if (!payload.invitationToken) {
+        throw new ForbiddenException(
+          'invitationToken is required when registering via an invitation',
+        );
+      }
+
+      const newUser = await this.prismaService.$transaction(async (tx) => {
+        // 1. Create user
+        const created = await tx.user.create({
+          data: {
+            email: authenticatedEmail,
+            firstName: payload.firstName,
+            lastName: payload.lastName,
+            phoneNumber: payload.phoneNumber,
+          },
+        });
+
+        // 2. Link to org + mark invitation ACCEPTED (within same tx)
+        await this.invitationsService.acceptInvitationInTransaction(
+          tx,
+          created.id,
+          authenticatedEmail,
+          payload.invitationToken!,
+        );
+
+        return created;
+      });
+
+      // 3. Issue a session token — only accessToken is returned for the invite flow
+      const { accessToken } = await this.generateAuthTokens(
+        newUser.id,
+        newUser.email,
+        newUser.globalRole,
+        { ip: 'invite-registration', userAgent: 'invite-registration' },
+      );
+
+      this.logger.log(
+        `[INVITE REGISTER] User ${newUser.email} completed invite-registration`,
+      );
+
+      return {
+        message: 'Registration completed successfully via invitation',
+        accessToken,
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          phoneNumber: newUser.phoneNumber,
+        },
+      };
+    }
+
+    // ── FLOW B: Normal OTP-authenticated user ───────────────────────────────
     const user = await this.prismaService.user.findUnique({
       where: { id: userId },
     });
@@ -236,8 +298,8 @@ export class AuthService {
       throw new ForbiddenException('User profile is already completed');
     }
 
-    // Verify that the email provided in the body matches the actual authenticated user email
-    if (payload.email.toLowerCase() !== authenticatedEmail.toLowerCase()) {
+    // Verify that the email provided in the body matches the authenticated user
+    if (payload.email && payload.email.toLowerCase() !== authenticatedEmail.toLowerCase()) {
       throw new ForbiddenException('The provided email does not match the authenticated user email');
     }
 
@@ -250,7 +312,9 @@ export class AuthService {
       },
     });
 
-    this.logger.log(`User ${user.email} completed registration as ${payload.firstName} ${payload.lastName}`);
+    this.logger.log(
+      `User ${user.email} completed registration as ${payload.firstName} ${payload.lastName}`,
+    );
 
     return {
       message: 'Registration completed successfully',
@@ -260,7 +324,7 @@ export class AuthService {
         firstName: updatedUser.firstName,
         lastName: updatedUser.lastName,
         phoneNumber: updatedUser.phoneNumber,
-      }
+      },
     };
   }
 

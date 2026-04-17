@@ -21,12 +21,22 @@ export class CompleteRegistrationDto {
   lastName: string;
 
   @ApiProperty({
-    description: 'The email address of the user (must match the authenticated user)',
+    description: 'The email address of the user. Not required when registering via invitation (email is read from the invite token).',
     example: 'user@example.com',
+    required: false,
   })
   @IsEmail({}, { message: 'Email must be a valid email address' })
-  @IsNotEmpty({ message: 'Email is required' })
-  email: string;
+  @IsOptional()
+  email?: string;
+
+  @ApiProperty({
+    description: 'The raw invitation token when registering via an invitation link.',
+    example: 'a1b2c3d4-e5f6-...',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  invitationToken?: string;
 
   @ApiProperty({
     description: 'The phone number of the user',

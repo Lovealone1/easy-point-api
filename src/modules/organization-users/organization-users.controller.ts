@@ -16,7 +16,7 @@ import { OrganizationUsersService } from './organization-users.service.js';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto.js';
 import { UpdateOrganizationUserDto } from './dto/update-organization-user.dto.js';
 import { FindOrganizationUsersDto } from './dto/find-organization-users.dto.js';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiTooManyRequestsResponse, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiConflictResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiTooManyRequestsResponse, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiConflictResponse, ApiQuery, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
@@ -26,6 +26,7 @@ import { PageDto } from '../../common/pagination/page.dto.js';
 
 @ApiTags('Organization Users')
 @ApiBearerAuth()
+@ApiSecurity('x-organization-id')
 @UseGuards(JwtAuthGuard, OrgRolesGuard)
 @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
 @Controller('organization-users')
