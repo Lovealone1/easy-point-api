@@ -50,6 +50,10 @@ async function bootstrap() {
     .setDescription('Core ERP SaaS - API Reference')
     .setVersion('1.0.0')
     .addBearerAuth()
+    .addApiKey(
+      { type: 'apiKey', in: 'header', name: 'x-organization-id' },
+      'x-organization-id',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

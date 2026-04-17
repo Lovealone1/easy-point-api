@@ -7,6 +7,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { InviteOrJwtGuard } from '../../common/guards/invite-or-jwt.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('auth')
@@ -93,12 +94,18 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiTags('Auth')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Complete User Registration', description: 'Updates an authenticated user profile with initial mandatory fields (Protected route).' })
+  @UseGuards(InviteOrJwtGuard)
+  @ApiOperation({
+    summary: 'Complete User Registration',
+    description:
+      'Accepts two token types in the Authorization header:\n' +
+      '1. **Invite token** (`canRegister: true, sub: null`) — Creates a brand-new user and links them to an org atomically. `invitationToken` must be provided in the body.\n' +
+      '2. **Session JWT** (normal OTP flow) — Updates the existing user profile. Email in body must match the authenticated user.',
+  })
   @ApiOkResponse({ description: 'Registration profile completed successfully' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
   async completeRegistration(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser('sub') userId: string | null,
     @CurrentUser('email') email: string,
     @Body() payload: CompleteRegistrationDto,
   ) {
