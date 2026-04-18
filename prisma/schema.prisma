@@ -32,36 +32,40 @@ enum OrganizationStatus {
 }
 
 model User {
-  id          String    @id @default(uuid())
-  email       String    @unique
+  id          String     @id @default(uuid())
+  email       String     @unique
   firstName   String?
   lastName    String?
   phoneNumber String?
   isActive    Boolean    @default(true)
   globalRole  GlobalRole @default(USER)
   lastLoginAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   organizations OrganizationUser[]
+  employee      Employee?
 
   @@map("users")
 }
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String?  @unique
-  email     String?
-  plan      Plan     @default(FREE)
+  id              String             @id @default(uuid())
+  name            String
+  slug            String?            @unique
+  email           String?
+  plan            Plan               @default(FREE)
   planActiveUntil DateTime?
-  status    OrganizationStatus @default(ACTIVE)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status          OrganizationStatus @default(ACTIVE)
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   members     OrganizationUser[]
   invitations Invitation[]
+  clients     Client[]
+  suppliers   Supplier[]
+  employees   Employee[]
 
   @@map("organizations")
 }
@@ -90,15 +94,15 @@ enum InvitationStatus {
 }
 
 model Invitation {
-  id             String           @id @default(uuid())
-  email          String
-  token          String           @unique
-  role           Role
-  status         InvitationStatus @default(PENDING)
-  expiresAt      DateTime
+  id        String           @id @default(uuid())
+  email     String
+  token     String           @unique
+  role      Role
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime
 
   organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -107,4 +111,88 @@ model Invitation {
   @@index([email])
   @@index([organizationId])
   @@map("invitations")
+}
+
+enum ClientType {
+  INDIVIDUAL
+  COMPANY
+}
+
+model Client {
+  id             String  @id @default(uuid())
+  organizationId String
+  name           String
+  taxId          String?
+  email          String?
+  phone          String
+  address        String?
+  creditLimit    Decimal @db.Decimal(10, 2)
+
+  isActive   Boolean    @default(true)
+  clientType ClientType @default(INDIVIDUAL)
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("clients")
+}
+
+model Supplier {
+  id             String  @id @default(uuid())
+  organizationId String
+  name           String
+  taxId          String
+  email          String
+  phone          String
+  address        String
+  bankAccount    String?
+  leadTime       Int
+
+  isActive     Boolean @default(true)
+  paymentTerms String?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("suppliers")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+model Employee {
+  id             String   @id @default(uuid())
+  organizationId String
+  firstName      String
+  lastName       String
+  taxId          String?
+  salary         Decimal  @db.Decimal(10, 2)
+  hireDate       DateTime
+  position       String
+
+  email  String?
+  phone  String?
+  status EmployeeStatus @default(ACTIVE)
+  userId String?        @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("employees")
 }
