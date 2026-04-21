@@ -24,18 +24,19 @@ src/modules/{nombre}/
 
 ## Paso 1 — DTOs
 
+> [!IMPORTANT]
+> **El `organizationId` NUNCA va en el body ni en el DTO de creación.** Llega automáticamente del header `x-organization-id` a través del `TenantMiddleware` y se obtiene en el service con `getTenantId()`. Incluirlo en el DTO es un error de diseño.
+
 ### `create-{nombre}.dto.ts`
-Todos los campos del modelo Prisma con sus validaciones. Los campos requeridos sin `@IsOptional()`, los opcionales con `@IsOptional()`.
+Solo los campos del modelo Prisma que el cliente debe proporcionar. **No incluir `organizationId`** — se resuelve desde el tenant context.
 
 ```typescript
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsOptional, IsEmail } from 'class-validator';
 
 export class CreateXxxDto {
-  @ApiProperty()
-  @IsNotEmpty()
-  @IsString()
-  organizationId: string;
+  // organizationId proviene del header x-organization-id via TenantMiddleware
+  // NO debe incluirse en el body
 
   @ApiProperty()
   @IsNotEmpty()
@@ -64,19 +65,17 @@ export class CreateXxxDto {
 ```
 
 ### `update-{nombre}.dto.ts`
-Siempre derivado de `CreateXxxDto`. Usa `OmitType` para excluir `organizationId` y `PartialType` para hacer todos los campos opcionales. **Importar siempre desde `@nestjs/swagger`** para que Swagger refleje correctamente los tipos.
+Siempre derivado de `CreateXxxDto` con `PartialType`. Como `organizationId` ya no está en el create DTO, no se necesita `OmitType`. **Importar siempre desde `@nestjs/swagger`** para que Swagger refleje correctamente los tipos.
 
 ```typescript
-import { PartialType, OmitType } from '@nestjs/swagger';
+import { PartialType } from '@nestjs/swagger';
 import { CreateXxxDto } from './create-xxx.dto.js';
 
-export class UpdateXxxDto extends PartialType(
-  OmitType(CreateXxxDto, ['organizationId'] as const)
-) {}
+export class UpdateXxxDto extends PartialType(CreateXxxDto) {}
 ```
 
 ### `find-{nombre}s.dto.ts`
-Hereda paginación y búsqueda de `PageOptionsDto`. Añadir filtros específicos del modelo.
+Hereda paginación y búsqueda de `PageOptionsDto`. **No incluir `organizationId`** como filtro de org — el `TenantMiddleware` lo impone automáticamente en el service. Solo el endpoint global Admin puede usar `organizationId` como query param optativo.
 
 ```typescript
 import { ApiPropertyOptional } from '@nestjs/swagger';
@@ -85,6 +84,8 @@ import { Transform } from 'class-transformer';
 import { PageOptionsDto } from '../../../common/pagination/page-options.dto.js';
 
 export class FindXxxsDto extends PageOptionsDto {
+  // Solo para el endpoint global Admin (filtro adicional)
+  // Para rutas de org, el filtro se aplica automáticamente via getTenantId()
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -185,15 +186,17 @@ Responsable de la lógica de negocio, validaciones y manejo de errores.
 - Siempre hacer `findOne()` antes de `update()` y `delete()` para lanzar `NotFoundException` si no existe.
 - Campos `Decimal` de Prisma deben envolverse en `new Prisma.Decimal(valor)`.
 - Para paginación usar `query.limit` (NO `query.take`) y convertir el orden a minúsculas con `.toLowerCase() as Prisma.SortOrder`.
+- **Obtener `organizationId` con `getTenantId()`** — nunca desde el DTO. En `create` lanzar `BadRequestException` si no hay tenant. En `findAll` usarlo para aislar los datos de la org.
 
 ```typescript
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { XxxsRepository } from './xxxs.repository.js';
 import { CreateXxxDto } from './dto/create-xxx.dto.js';
 import { UpdateXxxDto } from './dto/update-xxx.dto.js';
 import { FindXxxsDto } from './dto/find-xxxs.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
+import { getTenantId } from '../../common/context/tenant.context.js';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -201,8 +204,14 @@ export class XxxsService {
   constructor(private readonly xxxsRepository: XxxsRepository) {}
 
   async create(createXxxDto: CreateXxxDto) {
+    const organizationId = getTenantId();                  // ← siempre así
+    if (!organizationId) {
+      throw new BadRequestException('Missing x-organization-id header');
+    }
+
     return this.xxxsRepository.create({
       ...createXxxDto,
+      organizationId,
       // si hay campos Decimal:
       // someAmount: new Prisma.Decimal(createXxxDto.someAmount),
     });
@@ -211,7 +220,13 @@ export class XxxsService {
   async findAll(query: FindXxxsDto) {
     const where: Prisma.XxxWhereInput = {};
 
+    // Para rutas de org el tenant context impone el filtro de organización
+    const tenantId = getTenantId();
+    if (tenantId) where.organizationId = tenantId;
+
+    // El admin global puede pasar organizationId como query param para filtrar
     if (query.organizationId) where.organizationId = query.organizationId;
+
     if (query.name) where.name = { contains: query.name, mode: 'insensitive' };
     if (query.isActive !== undefined) where.isActive = query.isActive;
 
@@ -466,3 +481,5 @@ export class AppModule {}
 | `SortOrder` inválido | Prisma espera minúsculas | `query.order.toLowerCase() as Prisma.SortOrder` |
 | Ruta `global` resuelta como `:id` | Orden de declaración en controller | Declarar `GET global/all` **antes** de `GET :id` |
 | `UpdateClientDto` no refleja en Swagger | Import desde `@nestjs/mapped-types` | Siempre importar `PartialType`/`OmitType` desde `@nestjs/swagger` |
+| `organizationId` en el body del create | Anti-patrón: expone campo interno al cliente | Usar `getTenantId()` en el service; **nunca** en el DTO |
+| Datos de otra org visibles en el listado | `findAll` sin filtro tenant | Aplicar `if (tenantId) where.organizationId = tenantId` con `getTenantId()` |
