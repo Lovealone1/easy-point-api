@@ -7,6 +7,8 @@ import { InvitationsModule } from './modules/invitations/invitations.module.js';
 import { ClientsModule } from './modules/clients/clients.module.js';
 import { SuppliersModule } from './modules/suppliers/suppliers.module.js';
 import { EmployeesModule } from './modules/employees/employees.module.js';
+import { SuppliesModule } from './modules/supplies/supplies.module.js';
+import { ProductCategoriesModule } from './modules/product-categories/product-categories.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
@@ -33,6 +35,8 @@ import { MailService } from './infraestructure/mail/mail.service.js';
     ClientsModule,
     SuppliersModule,
     EmployeesModule,
+    SuppliesModule,
+    ProductCategoriesModule,
   ],
   controllers: [],
   providers: [MailService],
