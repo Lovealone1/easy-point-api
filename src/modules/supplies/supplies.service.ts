@@ -6,13 +6,25 @@ import { FindSuppliesDto } from './dto/find-supplies.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
+import { SupplyEntity } from './domain/supply.entity.js';
 import { Prisma } from '@prisma/client';
 
+/**
+ * Service de Supply — capa de aplicación (orquestación).
+ *
+ * Responsabilidades:
+ *  - Resolver el contexto de tenant (organizationId).
+ *  - Coordinar el flujo entre el repositorio y la entidad de dominio.
+ *  - Lanzar excepciones HTTP cuando un recurso no existe.
+ *  - Construir la respuesta paginada.
+ *
+ * NO contiene lógica de negocio. Toda regla de dominio vive en SupplyEntity.
+ */
 @Injectable()
 export class SuppliesService {
   constructor(private readonly suppliesRepository: SuppliesRepository) {}
 
-  async create(createSupplyDto: CreateSupplyDto) {
+  async create(createSupplyDto: CreateSupplyDto): Promise<SupplyEntity> {
     const organizationId = getTenantId();
     if (!organizationId) {
       throw new BadRequestException('Missing x-organization-id header');
@@ -29,10 +41,9 @@ export class SuppliesService {
     });
   }
 
-  async findAll(query: FindSuppliesDto) {
+  async findAll(query: FindSuppliesDto): Promise<PageDto<SupplyEntity>> {
     const where: Prisma.SupplyWhereInput = {};
 
-    // Para listados de org, el tenant context impone el filtro de organización
     const tenantId = getTenantId();
     if (tenantId) where.organizationId = tenantId;
 
@@ -54,7 +65,7 @@ export class SuppliesService {
     return new PageDto(items, pageMetaDto);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<SupplyEntity> {
     const supply = await this.suppliesRepository.findById(id);
     if (!supply) {
       throw new NotFoundException(`Supply with ID ${id} not found`);
@@ -62,12 +73,12 @@ export class SuppliesService {
     return supply;
   }
 
-  async update(id: string, updateSupplyDto: UpdateSupplyDto) {
+  async update(id: string, updateSupplyDto: UpdateSupplyDto): Promise<SupplyEntity> {
     const currentSupply = await this.findOne(id);
     return this.suppliesRepository.update(id, updateSupplyDto, currentSupply);
   }
 
-  async updateStock(id: string, quantityInStock: number) {
+  async updateStock(id: string, quantityInStock: number): Promise<SupplyEntity> {
     await this.findOne(id);
     return this.suppliesRepository.updateStock(
       id,
@@ -75,19 +86,22 @@ export class SuppliesService {
     );
   }
 
-  async remove(id: string) {
+  async remove(id: string): Promise<SupplyEntity> {
     await this.findOne(id);
     return this.suppliesRepository.delete(id);
   }
 
-  async toggleActive(id: string, isActive: boolean) {
+  async toggleActive(id: string, isActive: boolean): Promise<SupplyEntity> {
     const currentSupply = await this.findOne(id);
     return this.suppliesRepository.update(id, { isActive }, currentSupply);
   }
 
-  async addNote(id: string, notes: string) {
+  async addNote(id: string, note: string): Promise<SupplyEntity> {
     const supply = await this.findOne(id);
-    const newNotes = supply.notes ? `${supply.notes}\n${notes}` : notes;
-    return this.suppliesRepository.update(id, { notes: newNotes }, supply);
+
+    // La entidad aplica la lógica de concatenación de notas
+    supply.appendNote(note);
+
+    return this.suppliesRepository.update(id, { notes: supply.notes }, supply);
   }
 }
