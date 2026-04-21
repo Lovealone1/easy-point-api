@@ -61,12 +61,15 @@ model Organization {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  members     OrganizationUser[]
-  invitations Invitation[]
-  clients     Client[]
-  suppliers   Supplier[]
-  employees   Employee[]
-  supplies    Supply[]
+  members           OrganizationUser[]
+  invitations       Invitation[]
+  clients           Client[]
+  suppliers         Supplier[]
+  employees         Employee[]
+  supplies          Supply[]
+  productCategories ProductCategory[]
+  products          Product[]
+  recipes           Recipe[]
 
   @@map("organizations")
 }
@@ -232,4 +235,90 @@ model Supply {
   @@index([organizationId])
   @@index([name])
   @@map("supplies")
+}
+
+model ProductCategory {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name String
+
+  code String @db.Char(3)
+
+  isActive  Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products     Product[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("product_categories")
+}
+
+model Product {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name        String
+  description String?
+
+  sku String? @unique
+
+  barcode String?
+
+  salePrice Decimal @db.Decimal(12, 2)
+
+  costPrice Decimal? @db.Decimal(12, 2)
+
+  categoryId String?
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  isPurchased Boolean @default(false)
+
+  recipeId String? @unique
+  recipe   Recipe? @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+
+  imageUrl String?
+  notes    String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([categoryId])
+  @@index([sku])
+  @@map("products")
+}
+
+model Recipe {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name        String
+  description String?
+
+  content Json
+
+  category String?
+
+  estimatedTime Int?
+
+  isActive  Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  product Product?
+
+  @@index([organizationId])
+  @@index([category])
+  @@map("recipes")
 }
