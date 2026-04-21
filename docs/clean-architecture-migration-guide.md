@@ -26,10 +26,10 @@ El patrón anterior (Controller → Service → Repository) no definía una capa
 | Módulo | Entidad | Repository retorna entidad | Service solo orquesta | Estado |
 |--------|---------|---------------------------|----------------------|--------|
 | `supplies` | ✅ `domain/supply.entity.ts` | ✅ | ✅ | **✅ Migrado** |
+| `product-categories` | ✅ `domain/product-category.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `suppliers` | ❌ | ❌ | ❌ | 🔴 Pendiente |
 | `clients` | ❌ | ❌ | ❌ | 🔴 Pendiente |
 | `employees` | ❌ | ❌ | ❌ | 🔴 Pendiente |
-| `product-categories` | ❌ | ❌ | ❌ | 🔴 Pendiente |
 | `organizations` | ❌ | ❌ | ❌ | 🔴 Pendiente |
 | `organization-users` | ❌ | ❌ | ❌ | 🔴 Pendiente |
 | `invitations` | ❌ | ❌ | ❌ | 🔴 Pendiente |
