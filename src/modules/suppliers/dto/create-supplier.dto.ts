@@ -3,11 +3,7 @@ import { IsNotEmpty, IsString, IsOptional, IsEmail, IsNumber, IsInt, Min } from 
 import { Type } from 'class-transformer';
 
 export class CreateSupplierDto {
-  @ApiProperty({ description: 'The UUID of the organization' })
-  @IsNotEmpty()
-  @IsString()
-  organizationId: string;
-
+  // organizationId is handled by TenantMiddleware
   @ApiProperty({ description: 'Supplier company or person name' })
   @IsNotEmpty()
   @IsString()
