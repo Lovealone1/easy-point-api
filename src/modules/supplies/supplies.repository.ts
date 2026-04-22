@@ -109,4 +109,16 @@ export class SuppliesRepository {
     const raw = await this.prisma.supply.delete({ where: { id } });
     return SupplyEntity.fromPrisma(raw);
   }
+
+  /**
+   * Busca múltiples supplies por sus IDs en una sola query.
+   * Usado por RecipesService para resolver nombres de ingredientes automáticamente.
+   */
+  async findByIds(ids: string[]): Promise<SupplyEntity[]> {
+    const rows = await this.prisma.supply.findMany({
+      where: { id: { in: ids } },
+    });
+    return rows.map(SupplyEntity.fromPrisma);
+  }
 }
+

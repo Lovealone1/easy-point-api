@@ -6,15 +6,29 @@ import { FindProductCategoriesDto } from './dto/find-product-categories.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
+import { ProductCategoryEntity } from './domain/product-category.entity.js';
 import { Prisma } from '@prisma/client';
 
+/**
+ * Service de ProductCategory — capa de aplicación (orquestación).
+ *
+ * Responsabilidades:
+ *  - Resolver el contexto de tenant (organizationId).
+ *  - Coordinar el flujo entre el repositorio y la entidad de dominio.
+ *  - Traducir errores de infraestructura (Prisma P2002/P2003) a errores HTTP.
+ *  - Lanzar excepciones HTTP cuando un recurso no existe.
+ *
+ * NO contiene lógica de negocio. Las reglas de normalización viven en ProductCategoryEntity.
+ */
 @Injectable()
 export class ProductCategoriesService {
   constructor(
     private readonly productCategoriesRepository: ProductCategoriesRepository,
   ) {}
 
-  async create(createProductCategoryDto: CreateProductCategoryDto) {
+  async create(
+    createProductCategoryDto: CreateProductCategoryDto,
+  ): Promise<ProductCategoryEntity> {
     const organizationId = getTenantId();
     if (!organizationId) {
       throw new BadRequestException('Missing x-organization-id header');
@@ -42,10 +56,11 @@ export class ProductCategoriesService {
     }
   }
 
-  async findAll(query: FindProductCategoriesDto) {
+  async findAll(
+    query: FindProductCategoriesDto,
+  ): Promise<PageDto<ProductCategoryEntity>> {
     const where: Prisma.ProductCategoryWhereInput = {};
 
-    // Para listados de org, el tenant context impone el filtro de organización
     const tenantId = getTenantId();
     if (tenantId) where.organizationId = tenantId;
 
@@ -57,16 +72,14 @@ export class ProductCategoriesService {
       where,
       skip: query.skip,
       take: query.limit,
-      orderBy: {
-        [query.orderBy]: query.order.toLowerCase() as Prisma.SortOrder,
-      },
+      orderBy: { [query.orderBy]: query.order.toLowerCase() as Prisma.SortOrder },
     });
 
     const pageMetaDto = new PageMetaDto({ itemCount: count, pageOptionsDto: query });
     return new PageDto(items, pageMetaDto);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<ProductCategoryEntity> {
     const category = await this.productCategoriesRepository.findById(id);
     if (!category) {
       throw new NotFoundException(`ProductCategory with ID ${id} not found`);
@@ -74,12 +87,21 @@ export class ProductCategoriesService {
     return category;
   }
 
-  async update(id: string, updateProductCategoryDto: UpdateProductCategoryDto) {
+  async update(
+    id: string,
+    updateProductCategoryDto: UpdateProductCategoryDto,
+  ): Promise<ProductCategoryEntity> {
     await this.findOne(id);
     try {
-      return await this.productCategoriesRepository.update(id, updateProductCategoryDto);
+      return await this.productCategoriesRepository.update(
+        id,
+        updateProductCategoryDto,
+      );
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new BadRequestException(
           `A category with that code already exists in this organization`,
         );
@@ -88,12 +110,15 @@ export class ProductCategoriesService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string): Promise<ProductCategoryEntity> {
     await this.findOne(id);
     return this.productCategoriesRepository.delete(id);
   }
 
-  async toggleActive(id: string, isActive: boolean) {
+  async toggleActive(
+    id: string,
+    isActive: boolean,
+  ): Promise<ProductCategoryEntity> {
     await this.findOne(id);
     return this.productCategoriesRepository.update(id, { isActive });
   }
