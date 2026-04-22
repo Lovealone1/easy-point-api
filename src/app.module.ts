@@ -10,6 +10,7 @@ import { EmployeesModule } from './modules/employees/employees.module.js';
 import { SuppliesModule } from './modules/supplies/supplies.module.js';
 import { ProductCategoriesModule } from './modules/product-categories/product-categories.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
+import { RecipesModule } from './modules/recipes/recipes.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
@@ -39,6 +40,7 @@ import { MailService } from './infraestructure/mail/mail.service.js';
     SuppliesModule,
     ProductCategoriesModule,
     ProductsModule,
+    RecipesModule,
   ],
   controllers: [],
   providers: [MailService],

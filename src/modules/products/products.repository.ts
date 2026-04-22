@@ -42,6 +42,24 @@ export class ProductsRepository {
     return raw ? ProductEntity.fromPrisma(raw) : null;
   }
 
+  /**
+   * Busca un producto incluyendo el nombre de su categoría en el mismo SELECT (JOIN único).
+   * Usado por RecipesService para auto-poblar Recipe.category sin queries adicionales.
+   */
+  async findByIdWithCategory(
+    id: string,
+  ): Promise<{ entity: ProductEntity; categoryName: string | null } | null> {
+    const raw = await this.prisma.product.findUnique({
+      where: { id },
+      include: { category: { select: { name: true } } },
+    });
+    if (!raw) return null;
+    return {
+      entity: ProductEntity.fromPrisma(raw),
+      categoryName: raw.category?.name ?? null,
+    };
+  }
+
   async update(
     id: string,
     data: Prisma.ProductUncheckedUpdateInput,
@@ -67,4 +85,20 @@ export class ProductsRepository {
       where: { organizationId, categoryId: categoryId ?? undefined },
     });
   }
+
+  /**
+   * Vincula (o desvincula) un producto a una receta.
+   * Usado por RecipesService al crear una receta con productId.
+   */
+  async linkRecipe(
+    productId: string,
+    recipeId: string | null,
+  ): Promise<ProductEntity> {
+    const raw = await this.prisma.product.update({
+      where: { id: productId },
+      data: { recipeId },
+    });
+    return ProductEntity.fromPrisma(raw);
+  }
 }
+
