@@ -47,6 +47,9 @@ importers:
       argon2:
         specifier: ^0.44.0
         version: 0.44.0
+      bwip-js:
+        specifier: ^4.10.0
+        version: 4.10.0
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1816,6 +1819,10 @@ packages:
   busboy@1.6.0:
     resolution: {integrity: sha512-8SFQbg/0hQ9xy3UNTB0YEnsNBbWfhf7RtnzpL7TkBiTBRfrQ9Fxcnz7VJsleJpyp6rVLvXiuORqjlHi5q+PYuA==}
     engines: {node: '>=10.16.0'}
+
+  bwip-js@4.10.0:
+    resolution: {integrity: sha512-0BjxaLSvdW/vf3YqTFAcxifazVIfE7kfMBngpypT6eq3cCmEJVSI7o9ug5FoAoCLq07qsOajpTyV497FIMdxlw==}
+    hasBin: true
 
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
@@ -6700,6 +6707,8 @@ snapshots:
   busboy@1.6.0:
     dependencies:
       streamsearch: 1.1.0
+
+  bwip-js@4.10.0: {}
 
   bytes@3.1.2: {}
 
