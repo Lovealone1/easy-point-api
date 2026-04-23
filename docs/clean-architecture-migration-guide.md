@@ -30,24 +30,10 @@ El patrón anterior (Controller → Service → Repository) no definía una capa
 | `organizations` | ✅ `domain/organization.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `organization-users` | ✅ `domain/organization-user.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `suppliers` | ✅ `domain/supplier.entity.ts` | ✅ | ✅ | **✅ Migrado** |
-| `clients` | ❌ | ❌ | ❌ | 🔴 Pendiente |
+| `clients` | ✅ `domain/client.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `employees` | ✅ `domain/employee.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `invitations` | ❌ | ❌ | ❌ | 🔴 Pendiente |
 | `auth` | — | — | — | ⏸ No aplica (sin entidad propia) |
-
----
-
-## Proceso de migración paso a paso
-
-### Checklist por módulo
-
-```
-- [ ] Paso 1: Identificar la lógica de negocio existente
-- [ ] Paso 2: Crear la entidad de dominio en domain/
-- [ ] Paso 3: Actualizar el repository para retornar entidades
-- [ ] Paso 4: Simplificar el service a solo orquestación
-- [ ] Paso 5: Verificar que el build pasa sin errores
-```
 
 ---
 
@@ -317,17 +303,5 @@ Errores comunes de TypeScript durante la migración:
 
 ---
 
-## Orden recomendado de migración
-
-Priorizar módulos con más lógica de negocio:
-
-1. **`clients`** — tiene lógica de concatenación de notas + campos monetarios (`creditLimit`, `balance`)
-2. **`suppliers`** — similar a clients, lógica de notas
-3. **`employees`** — campos de salario/comisión
-4. **`product-categories`** — relativamente simple, buen módulo de práctica
-5. **`organizations`** / **`organization-users`** — más sensibles, migrar con cuidado
-6. **`invitations`** — lógica de negocio compleja (estado, expiración), dejar para cuando tengas experiencia con el patrón
-
 > [!TIP]
-> Migra un módulo a la vez y verifica con `npm run build` entre cada uno. No migres
-> en paralelo para evitar conflictos difíciles de rastrear.
+> Migra un módulo a la vez y verifica con `npm run build` entre cada uno.
