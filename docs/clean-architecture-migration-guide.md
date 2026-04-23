@@ -28,10 +28,10 @@ El patrón anterior (Controller → Service → Repository) no definía una capa
 | `supplies` | ✅ `domain/supply.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `product-categories` | ✅ `domain/product-category.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `organizations` | ✅ `domain/organization.entity.ts` | ✅ | ✅ | **✅ Migrado** |
-| `suppliers` | ❌ | ❌ | ❌ | 🔴 Pendiente |
+| `organization-users` | ✅ `domain/organization-user.entity.ts` | ✅ | ✅ | **✅ Migrado** |
+| `suppliers` | ✅ `domain/supplier.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `clients` | ❌ | ❌ | ❌ | 🔴 Pendiente |
-| `employees` | ❌ | ❌ | ❌ | 🔴 Pendiente |
-| `organization-users` | ❌ | ❌ | ❌ | 🔴 Pendiente |
+| `employees` | ✅ `domain/employee.entity.ts` | ✅ | ✅ | **✅ Migrado** |
 | `invitations` | ❌ | ❌ | ❌ | 🔴 Pendiente |
 | `auth` | — | — | — | ⏸ No aplica (sin entidad propia) |
 
