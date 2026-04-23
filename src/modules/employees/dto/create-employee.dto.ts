@@ -13,10 +13,6 @@ import { Type } from 'class-transformer';
 import { EmployeeStatus } from '@prisma/client';
 
 export class CreateEmployeeDto {
-  @ApiProperty({ description: 'The UUID of the organization' })
-  @IsNotEmpty()
-  @IsString()
-  organizationId: string;
 
   @ApiProperty({ description: 'Employee first name' })
   @IsNotEmpty()

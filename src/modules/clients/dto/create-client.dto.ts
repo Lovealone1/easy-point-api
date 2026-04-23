@@ -4,10 +4,6 @@ import { ClientType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class CreateClientDto {
-  @ApiProperty({ description: 'The UUID of the organization' })
-  @IsNotEmpty()
-  @IsString()
-  organizationId: string;
 
   @ApiProperty({ description: 'Client full name or company name' })
   @IsNotEmpty()

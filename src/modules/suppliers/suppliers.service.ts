@@ -6,19 +6,32 @@ import { FindSuppliersDto } from './dto/find-suppliers.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { Prisma } from '@prisma/client';
+import { getTenantId } from '../../common/context/tenant.context.js';
+import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class SuppliersService {
   constructor(private readonly suppliersRepository: SuppliersRepository) {}
 
   async create(createSupplierDto: CreateSupplierDto) {
-    return this.suppliersRepository.create(createSupplierDto);
+    const organizationId = getTenantId();
+    if (!organizationId) {
+      throw new BadRequestException('Missing x-organization-id header');
+    }
+    return this.suppliersRepository.create({
+      ...createSupplierDto,
+      organizationId,
+    });
   }
 
   async findAll(query: FindSuppliersDto) {
     const where: Prisma.SupplierWhereInput = {};
 
-    if (query.organizationId) {
+    const tenantId = getTenantId();
+    if (tenantId) {
+      where.organizationId = tenantId;
+    } else if (query.organizationId) {
+      // For global admin if tenant is not present
       where.organizationId = query.organizationId;
     }
 
@@ -50,8 +63,8 @@ export class SuppliersService {
   }
 
   async update(id: string, updateSupplierDto: UpdateSupplierDto) {
-    await this.findOne(id);
-    return this.suppliersRepository.update(id, updateSupplierDto);
+    const current = await this.findOne(id);
+    return this.suppliersRepository.update(id, updateSupplierDto, current);
   }
 
   async remove(id: string) {
@@ -60,13 +73,13 @@ export class SuppliersService {
   }
 
   async toggleActive(id: string, isActive: boolean) {
-    await this.findOne(id);
-    return this.suppliersRepository.update(id, { isActive });
+    const current = await this.findOne(id);
+    return this.suppliersRepository.update(id, { isActive }, current);
   }
 
   async addNote(id: string, notes: string) {
     const supplier = await this.findOne(id);
-    const newNotes = supplier.notes ? `${supplier.notes}\n${notes}` : notes;
-    return this.suppliersRepository.update(id, { notes: newNotes });
+    supplier.appendNote(notes);
+    return this.suppliersRepository.update(id, { notes: supplier.notes }, supplier);
   }
 }
