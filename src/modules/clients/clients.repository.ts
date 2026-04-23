@@ -1,13 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma, Client } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { ClientEntity } from './domain/client.entity.js';
 
+/**
+ * Repository de Client — capa de infraestructura.
+ *
+ * Responsabilidades:
+ *  - Toda comunicación con la base de datos (Prisma).
+ *  - Mapeo entre el modelo Prisma y la entidad de dominio ClientEntity.
+ *
+ * NO contiene lógica de negocio.
+ */
 @Injectable()
 export class ClientsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: Prisma.ClientUncheckedCreateInput): Promise<Client> {
-    return this.prisma.client.create({ data });
+  async create(
+    data: Prisma.ClientUncheckedCreateInput,
+  ): Promise<ClientEntity> {
+    const raw = await this.prisma.client.create({ data });
+    return ClientEntity.fromPrisma(raw);
   }
 
   async findManyWithCount(params: {
@@ -15,28 +28,30 @@ export class ClientsRepository {
     take?: number;
     where?: Prisma.ClientWhereInput;
     orderBy?: Prisma.ClientOrderByWithRelationInput;
-  }): Promise<[any[], number]> {
+  }): Promise<[ClientEntity[], number]> {
     const { skip, take, where, orderBy } = params;
-    return Promise.all([
+    const [rows, count] = await Promise.all([
       this.prisma.client.findMany({ skip, take, where, orderBy }),
       this.prisma.client.count({ where }),
     ]);
+    return [rows.map(ClientEntity.fromPrisma), count];
   }
 
-  async findById(id: string): Promise<Client | null> {
-    return this.prisma.client.findUnique({ where: { id } });
+  async findById(id: string): Promise<ClientEntity | null> {
+    const raw = await this.prisma.client.findUnique({ where: { id } });
+    return raw ? ClientEntity.fromPrisma(raw) : null;
   }
 
-  async update(id: string, data: Prisma.ClientUncheckedUpdateInput): Promise<Client> {
-    return this.prisma.client.update({
-      where: { id },
-      data,
-    });
+  async update(
+    id: string,
+    data: Prisma.ClientUncheckedUpdateInput,
+  ): Promise<ClientEntity> {
+    const raw = await this.prisma.client.update({ where: { id }, data });
+    return ClientEntity.fromPrisma(raw);
   }
 
-  async delete(id: string): Promise<Client> {
-    return this.prisma.client.delete({
-      where: { id },
-    });
+  async delete(id: string): Promise<ClientEntity> {
+    const raw = await this.prisma.client.delete({ where: { id } });
+    return ClientEntity.fromPrisma(raw);
   }
 }
