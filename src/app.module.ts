@@ -13,6 +13,8 @@ import { ProductsModule } from './modules/products/products.module.js';
 import { RecipesModule } from './modules/recipes/recipes.module.js';
 import { ProductStocksModule } from './modules/product-stocks/product-stocks.module.js';
 import { InventoryMovementsModule } from './modules/inventory-movements/inventory-movements.module.js';
+import { SupplyStocksModule } from './modules/supply-stocks/supply-stocks.module.js';
+import { SupplyMovementsModule } from './modules/supply-movements/supply-movements.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
@@ -46,6 +48,8 @@ import { CronModule } from './common/cron/cron.module.js';
     RecipesModule,
     ProductStocksModule,
     InventoryMovementsModule,
+    SupplyStocksModule,
+    SupplyMovementsModule,
     CronModule,
   ],
   controllers: [],
