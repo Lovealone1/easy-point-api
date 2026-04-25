@@ -55,7 +55,7 @@ export class InventoryMovementsController {
   @ApiOperation({ summary: 'Create Adjustment Movement' })
   @ApiCreatedResponse({ description: 'Adjustment created successfully.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  createAdjustment(@CurrentUser('id') userId: string, @Body() dto: CreateAdjustmentMovementDto) {
+  createAdjustment(@CurrentUser('sub') userId: string, @Body() dto: CreateAdjustmentMovementDto) {
     return this.inventoryMovementsService.createAdjustment(userId, dto);
   }
 
@@ -67,7 +67,7 @@ export class InventoryMovementsController {
   @ApiOperation({ summary: 'Create Waste Movement' })
   @ApiCreatedResponse({ description: 'Waste movement created successfully.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  createWaste(@CurrentUser('id') userId: string, @Body() dto: CreateWasteMovementDto) {
+  createWaste(@CurrentUser('sub') userId: string, @Body() dto: CreateWasteMovementDto) {
     return this.inventoryMovementsService.createWaste(userId, dto);
   }
 
@@ -79,7 +79,7 @@ export class InventoryMovementsController {
   @ApiOperation({ summary: 'Create Tests Movement' })
   @ApiCreatedResponse({ description: 'Tests movement created successfully.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  createTests(@CurrentUser('id') userId: string, @Body() dto: CreateTestsMovementDto) {
+  createTests(@CurrentUser('sub') userId: string, @Body() dto: CreateTestsMovementDto) {
     return this.inventoryMovementsService.createTests(userId, dto);
   }
 
@@ -91,7 +91,7 @@ export class InventoryMovementsController {
   @ApiOperation({ summary: 'Create Production Movement' })
   @ApiCreatedResponse({ description: 'Production movement created successfully.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  createProduction(@CurrentUser('id') userId: string, @Body() dto: CreateProductionMovementDto) {
+  createProduction(@CurrentUser('sub') userId: string, @Body() dto: CreateProductionMovementDto) {
     return this.inventoryMovementsService.createProduction(userId, dto);
   }
 }

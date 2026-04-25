@@ -53,7 +53,7 @@ export class SupplyMovementsController {
   @ApiOperation({ summary: 'Create Purchase Movement' })
   @ApiCreatedResponse({ description: 'Purchase movement created successfully.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  createPurchase(@CurrentUser('id') userId: string, @Body() dto: CreateSupplyPurchaseMovementDto) {
+  createPurchase(@CurrentUser('sub') userId: string, @Body() dto: CreateSupplyPurchaseMovementDto) {
     return this.supplyMovementsService.createPurchase(userId, dto);
   }
 
@@ -65,7 +65,7 @@ export class SupplyMovementsController {
   @ApiOperation({ summary: 'Create Production Movement' })
   @ApiCreatedResponse({ description: 'Production movement created successfully.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  createProduction(@CurrentUser('id') userId: string, @Body() dto: CreateSupplyProductionMovementDto) {
+  createProduction(@CurrentUser('sub') userId: string, @Body() dto: CreateSupplyProductionMovementDto) {
     return this.supplyMovementsService.createProduction(userId, dto);
   }
 }
