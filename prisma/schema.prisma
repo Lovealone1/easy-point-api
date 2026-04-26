@@ -43,10 +43,11 @@ model User {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  organizations      OrganizationUser[]
-  employee           Employee?
-  inventoryMovements InventoryMovement[]
-  supplyMovements    SupplyMovement[]
+  organizations         OrganizationUser[]
+  employee              Employee?
+  inventoryMovements    InventoryMovement[]
+  supplyMovements       SupplyMovement[]
+  financialTransactions FinancialTransaction[]
 
   @@map("users")
 }
@@ -63,19 +64,21 @@ model Organization {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  members            OrganizationUser[]
-  invitations        Invitation[]
-  clients            Client[]
-  suppliers          Supplier[]
-  employees          Employee[]
-  supplies           Supply[]
-  productCategories  ProductCategory[]
-  products           Product[]
-  recipes            Recipe[]
-  productStocks      ProductStock[]
-  inventoryMovements InventoryMovement[]
-  supplyStocks       SupplyStock[]
-  supplyMovements    SupplyMovement[]
+  members               OrganizationUser[]
+  invitations           Invitation[]
+  clients               Client[]
+  suppliers             Supplier[]
+  employees             Employee[]
+  supplies              Supply[]
+  productCategories     ProductCategory[]
+  products              Product[]
+  recipes               Recipe[]
+  productStocks         ProductStock[]
+  inventoryMovements    InventoryMovement[]
+  supplyStocks          SupplyStock[]
+  supplyMovements       SupplyMovement[]
+  bankAccounts          BankAccount[]
+  financialTransactions FinancialTransaction[]
 
   @@map("organizations")
 }
@@ -466,4 +469,87 @@ model SupplyMovement {
   @@index([type])
   @@index([createdAt])
   @@map("supply_movements")
+}
+
+enum BankAccountStatus {
+  ACTIVE
+  FROZEN
+  INACTIVE
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum OperationType {
+  SALE
+  PURCHASE
+  REFUND
+  TRANSFER
+  ADJUSTMENT
+}
+
+model BankAccount {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name     String
+  balance  Decimal @default(0) @db.Decimal(19, 4)
+  currency String  @default("COP") @db.Char(3)
+
+  version Int @default(1)
+
+  accountNumber String?
+  qrCode        String?
+
+  status BankAccountStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions FinancialTransaction[]
+
+  @@index([organizationId])
+  @@map("bank_accounts")
+}
+
+model FinancialTransaction {
+  id             String @id @default(uuid())
+  organizationId String
+
+  transactionNumber String
+
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+
+  type   TransactionType
+  amount Decimal         @db.Decimal(19, 4)
+
+  balanceBefore Decimal @db.Decimal(19, 4)
+  balanceAfter  Decimal @db.Decimal(19, 4)
+
+  operationType OperationType
+  referenceId   String?
+  referenceType String?
+
+  description String?
+
+  metadata Json?
+
+  performedByUserId String?
+  performedBy       User?   @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, transactionNumber])
+  @@index([organizationId])
+  @@index([bankAccountId])
+  @@index([type])
+  @@index([operationType])
+  @@index([createdAt])
+  @@map("financial_transactions")
 }
