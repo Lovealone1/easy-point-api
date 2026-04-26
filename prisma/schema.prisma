@@ -48,6 +48,7 @@ model User {
   inventoryMovements    InventoryMovement[]
   supplyMovements       SupplyMovement[]
   financialTransactions FinancialTransaction[]
+  supplyPurchases       SupplyPurchase[]
 
   @@map("users")
 }
@@ -79,6 +80,7 @@ model Organization {
   supplyMovements       SupplyMovement[]
   bankAccounts          BankAccount[]
   financialTransactions FinancialTransaction[]
+  supplyPurchases       SupplyPurchase[]
 
   @@map("organizations")
 }
@@ -172,7 +174,8 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplyPurchases SupplyPurchase[]
 
   @@index([organizationId])
   @@map("suppliers")
@@ -454,6 +457,9 @@ model SupplyMovement {
   type   SupplyMovementType
   reason String?
 
+  supplyPurchaseId String?
+  supplyPurchase   SupplyPurchase? @relation(fields: [supplyPurchaseId], references: [id], onDelete: SetNull)
+
   referenceId       String?
   referenceType     String?
   performedByUserId String?
@@ -545,6 +551,8 @@ model FinancialTransaction {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  supplyPurchase SupplyPurchase?
+
   @@unique([organizationId, transactionNumber])
   @@index([organizationId])
   @@index([bankAccountId])
@@ -552,4 +560,38 @@ model FinancialTransaction {
   @@index([operationType])
   @@index([createdAt])
   @@map("financial_transactions")
+}
+
+enum PurchaseStatus {
+  COMPLETED
+  CANCELLED
+}
+
+model SupplyPurchase {
+  id             String @id @default(uuid())
+  organizationId String
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  totalAmount Decimal @db.Decimal(19, 4)
+
+  transactionId String?               @unique
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  status PurchaseStatus @default(COMPLETED)
+  notes  String?
+
+  performedByUserId String?
+  performedBy       User?   @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  movements    SupplyMovement[]
+
+  @@index([organizationId])
+  @@index([supplierId])
+  @@map("supply_purchases")
 }
