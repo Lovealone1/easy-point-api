@@ -17,7 +17,6 @@ import { UpdateSupplyDto } from './dto/update-supply.dto.js';
 import { FindSuppliesDto } from './dto/find-supplies.dto.js';
 import { ToggleSupplyActiveDto } from './dto/toggle-supply-active.dto.js';
 import { AddSupplyNoteDto } from './dto/add-supply-note.dto.js';
-import { UpdateStockDto } from './dto/update-supply-stock.dto.js';
 import {
   ApiTags,
   ApiOperation,
@@ -107,21 +106,7 @@ export class SuppliesController {
     return this.suppliesService.update(id, updateSupplyDto);
   }
 
-  @Patch(':id/stock')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
-  @ApiSecurity('x-organization-id')
-  @ApiOperation({
-    summary: 'Update stock quantity (Org Owner / Org Admin)',
-    description:
-      'Único endpoint autorizado para modificar quantityInStock. Establece la cantidad absoluta en inventario.',
-  })
-  @ApiOkResponse({ description: 'Stock updated successfully.' })
-  @ApiNotFoundResponse({ description: 'Supply not found.' })
-  @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  updateStock(@Param('id') id: string, @Body() updateStockDto: UpdateStockDto) {
-    return this.suppliesService.updateStock(id, updateStockDto.quantityInStock);
-  }
+
 
   @Patch(':id/toggle-active')
   @UseGuards(JwtAuthGuard, OrgRolesGuard)

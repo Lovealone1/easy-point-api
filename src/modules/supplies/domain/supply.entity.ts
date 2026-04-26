@@ -9,7 +9,6 @@ export class SupplyEntity {
   basePrice: Prisma.Decimal;
   packageSize: Prisma.Decimal;
   pricePerUnit: Prisma.Decimal;
-  quantityInStock: Prisma.Decimal;
   isActive: boolean;
   notes: string | null;
   readonly organizationId: string;
@@ -24,7 +23,6 @@ export class SupplyEntity {
     basePrice: Prisma.Decimal;
     packageSize: Prisma.Decimal;
     pricePerUnit: Prisma.Decimal;
-    quantityInStock: Prisma.Decimal;
     isActive: boolean;
     notes: string | null;
     organizationId: string;
@@ -38,7 +36,6 @@ export class SupplyEntity {
     this.basePrice = params.basePrice;
     this.packageSize = params.packageSize;
     this.pricePerUnit = params.pricePerUnit;
-    this.quantityInStock = params.quantityInStock;
     this.isActive = params.isActive;
     this.notes = params.notes;
     this.organizationId = params.organizationId;
@@ -69,7 +66,6 @@ export class SupplyEntity {
     basePrice: Prisma.Decimal;
     packageSize: Prisma.Decimal;
     pricePerUnit: Prisma.Decimal;
-    quantityInStock: Prisma.Decimal;
     isActive: boolean;
     notes: string | null;
     organizationId: string;
@@ -84,7 +80,6 @@ export class SupplyEntity {
       basePrice: raw.basePrice,
       packageSize: raw.packageSize,
       pricePerUnit: raw.pricePerUnit,
-      quantityInStock: raw.quantityInStock,
       isActive: raw.isActive,
       notes: raw.notes,
       organizationId: raw.organizationId,

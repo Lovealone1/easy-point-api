@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SuppliesRepository } from './supplies.repository.js';
+import { SupplyStocksService } from '../supply-stocks/supply-stocks.service.js';
 import { CreateSupplyDto } from './dto/create-supply.dto.js';
 import { UpdateSupplyDto } from './dto/update-supply.dto.js';
 import { FindSuppliesDto } from './dto/find-supplies.dto.js';
@@ -22,7 +23,10 @@ import { Prisma } from '@prisma/client';
  */
 @Injectable()
 export class SuppliesService {
-  constructor(private readonly suppliesRepository: SuppliesRepository) {}
+  constructor(
+    private readonly suppliesRepository: SuppliesRepository,
+    private readonly supplyStocksService: SupplyStocksService,
+  ) {}
 
   async create(createSupplyDto: CreateSupplyDto): Promise<SupplyEntity> {
     const organizationId = getTenantId();
@@ -30,15 +34,20 @@ export class SuppliesService {
       throw new BadRequestException('Missing x-organization-id header');
     }
 
-    return this.suppliesRepository.create({
+    const createdSupply = await this.suppliesRepository.create({
       ...createSupplyDto,
       organizationId,
       basePrice: new Prisma.Decimal(createSupplyDto.basePrice),
       packageSize: new Prisma.Decimal(createSupplyDto.packageSize),
-      ...(createSupplyDto.quantityInStock !== undefined && {
-        quantityInStock: new Prisma.Decimal(createSupplyDto.quantityInStock),
-      }),
     });
+
+    await this.supplyStocksService.create({
+      supplyId: createdSupply.id,
+      location: 'Principal',
+      minQuantity: 0,
+    });
+
+    return createdSupply;
   }
 
   async findAll(query: FindSuppliesDto): Promise<PageDto<SupplyEntity>> {
@@ -78,13 +87,7 @@ export class SuppliesService {
     return this.suppliesRepository.update(id, updateSupplyDto, currentSupply);
   }
 
-  async updateStock(id: string, quantityInStock: number): Promise<SupplyEntity> {
-    await this.findOne(id);
-    return this.suppliesRepository.updateStock(
-      id,
-      new Prisma.Decimal(quantityInStock),
-    );
-  }
+
 
   async remove(id: string): Promise<SupplyEntity> {
     await this.findOne(id);
