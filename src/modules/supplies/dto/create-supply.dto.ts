@@ -45,16 +45,6 @@ export class CreateSupplyDto {
 
   // pricePerUnit excluido intencionalmente: calculado automáticamente por el repositorio
 
-  @ApiPropertyOptional({
-    description: 'Stock inicial al crear la materia prima. Por defecto 0.',
-    default: 0,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 4 })
-  @Min(0)
-  quantityInStock?: number;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

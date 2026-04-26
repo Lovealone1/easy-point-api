@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ProductsRepository } from './products.repository.js';
 import { OrganizationsRepository } from '../organizations/organizations.repository.js';
+import { ProductStocksService } from '../product-stocks/product-stocks.service.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { FindProductsDto } from './dto/find-products.dto.js';
@@ -32,6 +33,7 @@ export class ProductsService {
   constructor(
     private readonly productsRepository: ProductsRepository,
     private readonly organizationsRepository: OrganizationsRepository,
+    private readonly productStocksService: ProductStocksService,
   ) {}
 
   async create(createProductDto: CreateProductDto): Promise<ProductEntity> {
@@ -92,7 +94,7 @@ export class ProductsService {
     entity.assignAutoBarcode();
 
     try {
-      return await this.productsRepository.create({
+      const createdProduct = await this.productsRepository.create({
         name: entity.name,
         description: entity.description,
         sku: entity.sku,
@@ -106,6 +108,15 @@ export class ProductsService {
         isActive: entity.isActive,
         organizationId: entity.organizationId,
       });
+
+      // Se inicializa automáticamente el stock del producto en "Principal"
+      await this.productStocksService.create({
+        productId: createdProduct.id,
+        location: 'Principal',
+        minQuantity: 0,
+      });
+
+      return createdProduct;
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&

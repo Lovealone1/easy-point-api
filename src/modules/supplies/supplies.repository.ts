@@ -21,9 +21,6 @@ export class SuppliesRepository {
       basePrice: new Prisma.Decimal(data.basePrice),
       packageSize: new Prisma.Decimal(data.packageSize),
       pricePerUnit: new Prisma.Decimal(0),
-      quantityInStock: data.quantityInStock
-        ? new Prisma.Decimal(data.quantityInStock as string | number)
-        : new Prisma.Decimal(0),
       isActive: true,
       notes: (data.notes as string) ?? null,
       organizationId: data.organizationId,
@@ -65,7 +62,7 @@ export class SuppliesRepository {
 
   async update(
     id: string,
-    data: Omit<Prisma.SupplyUncheckedUpdateInput, 'pricePerUnit' | 'quantityInStock'>,
+    data: Omit<Prisma.SupplyUncheckedUpdateInput, 'pricePerUnit'>,
     currentEntity: SupplyEntity,
   ): Promise<SupplyEntity> {
     const newBasePrice =
@@ -94,16 +91,7 @@ export class SuppliesRepository {
     return SupplyEntity.fromPrisma(raw);
   }
 
-  async updateStock(
-    id: string,
-    quantityInStock: Prisma.Decimal,
-  ): Promise<SupplyEntity> {
-    const raw = await this.prisma.supply.update({
-      where: { id },
-      data: { quantityInStock },
-    });
-    return SupplyEntity.fromPrisma(raw);
-  }
+
 
   async delete(id: string): Promise<SupplyEntity> {
     const raw = await this.prisma.supply.delete({ where: { id } });
