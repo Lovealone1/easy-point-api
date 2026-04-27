@@ -26,8 +26,12 @@ export class BankAccountsRepository {
     return [rows.map(BankAccountEntity.fromPrisma), count];
   }
 
-  async findById(id: string): Promise<BankAccountEntity | null> {
-    const raw = await this.prisma.bankAccount.findUnique({ where: { id } });
+  async findById(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<BankAccountEntity | null> {
+    const client = tx ?? this.prisma;
+    const raw = await client.bankAccount.findUnique({ where: { id } });
     return raw ? BankAccountEntity.fromPrisma(raw) : null;
   }
 
@@ -41,14 +45,17 @@ export class BankAccountsRepository {
 
   /**
    * Updates an account ensuring the version matches (optimistic locking).
-   * Note: We increment the version automatically here.
+   * Accepts an optional Prisma TransactionClient (`tx`) so this operation
+   * can participate in an outer atomic block managed by the caller.
    */
   async updateWithVersion(
     id: string,
     currentVersion: number,
     data: Prisma.BankAccountUncheckedUpdateInput,
+    tx?: Prisma.TransactionClient,
   ): Promise<BankAccountEntity> {
-    const raw = await this.prisma.bankAccount.update({
+    const client = tx ?? this.prisma;
+    const raw = await client.bankAccount.update({
       where: { id, version: currentVersion },
       data: {
         ...data,

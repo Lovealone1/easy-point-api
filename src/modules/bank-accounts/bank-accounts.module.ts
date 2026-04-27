@@ -8,6 +8,6 @@ import { PrismaModule } from '../../prisma/prisma.module.js';
   imports: [PrismaModule],
   controllers: [BankAccountsController],
   providers: [BankAccountsService, BankAccountsRepository],
-  exports: [BankAccountsService],
+  exports: [BankAccountsService, BankAccountsRepository],
 })
 export class BankAccountsModule {}
