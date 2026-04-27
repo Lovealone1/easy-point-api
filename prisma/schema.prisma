@@ -43,10 +43,14 @@ model User {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  organizations      OrganizationUser[]
-  employee           Employee?
-  inventoryMovements InventoryMovement[]
-  supplyMovements    SupplyMovement[]
+  organizations         OrganizationUser[]
+  employee              Employee?
+  inventoryMovements    InventoryMovement[]
+  supplyMovements       SupplyMovement[]
+  financialTransactions FinancialTransaction[]
+  supplyPurchases       SupplyPurchase[]
+  productPurchases      ProductPurchase[]
+  sales                 Sale[]
 
   @@map("users")
 }
@@ -63,19 +67,25 @@ model Organization {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  members            OrganizationUser[]
-  invitations        Invitation[]
-  clients            Client[]
-  suppliers          Supplier[]
-  employees          Employee[]
-  supplies           Supply[]
-  productCategories  ProductCategory[]
-  products           Product[]
-  recipes            Recipe[]
-  productStocks      ProductStock[]
-  inventoryMovements InventoryMovement[]
-  supplyStocks       SupplyStock[]
-  supplyMovements    SupplyMovement[]
+  members               OrganizationUser[]
+  invitations           Invitation[]
+  clients               Client[]
+  suppliers             Supplier[]
+  employees             Employee[]
+  supplies              Supply[]
+  productCategories     ProductCategory[]
+  products              Product[]
+  recipes               Recipe[]
+  productStocks         ProductStock[]
+  inventoryMovements    InventoryMovement[]
+  supplyStocks          SupplyStock[]
+  supplyMovements       SupplyMovement[]
+  bankAccounts          BankAccount[]
+  financialTransactions FinancialTransaction[]
+  supplyPurchases       SupplyPurchase[]
+  productPurchases      ProductPurchase[]
+  sales                 Sale[]
+  transactionCategories TransactionCategory[]
 
   @@map("organizations")
 }
@@ -146,6 +156,7 @@ model Client {
   updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sales        Sale[]
 
   @@index([organizationId])
   @@map("clients")
@@ -169,7 +180,9 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplyPurchases  SupplyPurchase[]
+  productPurchases ProductPurchase[]
 
   @@index([organizationId])
   @@map("suppliers")
@@ -384,6 +397,12 @@ model InventoryMovement {
   type   MovementType
   reason String?
 
+  productPurchaseId String?
+  productPurchase   ProductPurchase? @relation(fields: [productPurchaseId], references: [id], onDelete: SetNull)
+
+  saleId String?
+  sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
   referenceId       String?
   referenceType     String?
   performedByUserId String?
@@ -451,6 +470,9 @@ model SupplyMovement {
   type   SupplyMovementType
   reason String?
 
+  supplyPurchaseId String?
+  supplyPurchase   SupplyPurchase? @relation(fields: [supplyPurchaseId], references: [id], onDelete: SetNull)
+
   referenceId       String?
   referenceType     String?
   performedByUserId String?
@@ -466,4 +488,229 @@ model SupplyMovement {
   @@index([type])
   @@index([createdAt])
   @@map("supply_movements")
+}
+
+enum BankAccountStatus {
+  ACTIVE
+  FROZEN
+  INACTIVE
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum OperationType {
+  SALE
+  PURCHASE
+  REFUND
+  TRANSFER
+  ADJUSTMENT
+}
+
+model BankAccount {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name     String
+  balance  Decimal @default(0) @db.Decimal(19, 4)
+  currency String  @default("COP") @db.Char(3)
+
+  version Int @default(1)
+
+  accountNumber String?
+  qrCode        String?
+
+  status BankAccountStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions FinancialTransaction[]
+
+  @@index([organizationId])
+  @@map("bank_accounts")
+}
+
+model FinancialTransaction {
+  id             String @id @default(uuid())
+  organizationId String
+
+  transactionNumber String
+
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+
+  type   TransactionType
+  amount Decimal         @db.Decimal(19, 4)
+
+  balanceBefore Decimal @db.Decimal(19, 4)
+  balanceAfter  Decimal @db.Decimal(19, 4)
+
+  operationType OperationType
+  referenceId   String?
+  referenceType String?
+
+  categoryId String?
+  category   TransactionCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  paymentMethod PaymentMethod?
+
+  description String?
+
+  metadata Json?
+
+  performedByUserId String?
+  performedBy       User?   @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  supplyPurchase  SupplyPurchase?
+  productPurchase ProductPurchase?
+  sale            Sale?
+
+  @@unique([organizationId, transactionNumber])
+  @@index([organizationId])
+  @@index([bankAccountId])
+  @@index([type])
+  @@index([operationType])
+  @@index([createdAt])
+  @@map("financial_transactions")
+}
+
+enum PurchaseStatus {
+  COMPLETED
+  CANCELLED
+  PENDING
+}
+
+model SupplyPurchase {
+  id             String @id @default(uuid())
+  organizationId String
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  totalAmount Decimal @db.Decimal(19, 4)
+
+  transactionId String?               @unique
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  status PurchaseStatus @default(COMPLETED)
+  notes  String?
+
+  performedByUserId String?
+  performedBy       User?   @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  movements    SupplyMovement[]
+
+  @@index([organizationId])
+  @@index([supplierId])
+  @@map("supply_purchases")
+}
+
+enum SaleStatus {
+  COMPLETED
+  CANCELLED
+  PENDING
+}
+
+model ProductPurchase {
+  id             String @id @default(uuid())
+  organizationId String
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  totalAmount Decimal @db.Decimal(19, 4)
+
+  transactionId String?               @unique
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  status PurchaseStatus @default(COMPLETED)
+  notes  String?
+
+  performedByUserId String?
+  performedBy       User?   @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  movements    InventoryMovement[]
+
+  @@index([organizationId])
+  @@index([supplierId])
+  @@map("product_purchases")
+}
+
+model Sale {
+  id             String @id @default(uuid())
+  organizationId String
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  totalAmount Decimal @db.Decimal(19, 4)
+
+  transactionId String?               @unique
+  transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  status SaleStatus @default(COMPLETED)
+  notes  String?
+
+  performedByUserId String?
+  performedBy       User?   @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  movements    InventoryMovement[]
+
+  @@index([organizationId])
+  @@index([clientId])
+  @@map("sales")
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  CHECK
+  OTHER
+}
+
+enum TransactionCategoryType {
+  INCOME
+  EXPENSE
+}
+
+model TransactionCategory {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name        String
+  description String?
+  type        TransactionCategoryType
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions FinancialTransaction[]
+
+  @@unique([organizationId, name, type])
+  @@index([organizationId])
+  @@map("transaction_categories")
 }

@@ -203,8 +203,8 @@ export default registerAs('app', (): AppConfig => ({
   },
   jwt: {
     secret: getString('JWT_SECRET', 'fallback_secreto_desarrollo_temporal'),
-    expiresIn: getString('JWT_EXPIRES_IN', '15m'),
+    expiresIn: getString('JWT_EXPIRES_IN', '7d'),
     refreshSecret: getString('JWT_REFRESH_SECRET', 'fallback_refresh_secreto_7X'),
-    refreshExpiresIn: getString('JWT_REFRESH_EXPIRES_IN', '7d'),
+    refreshExpiresIn: getString('JWT_REFRESH_EXPIRES_IN', '30d'),
   },
 }));

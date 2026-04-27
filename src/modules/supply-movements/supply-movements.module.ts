@@ -9,6 +9,7 @@ import { PrismaModule } from '../../prisma/prisma.module.js';
   imports: [PrismaModule, SupplyStocksModule],
   controllers: [SupplyMovementsController],
   providers: [SupplyMovementsService, SupplyMovementsRepository],
-  exports: [SupplyMovementsService],
+  exports: [SupplyMovementsService, SupplyMovementsRepository],
 })
 export class SupplyMovementsModule {}
+
