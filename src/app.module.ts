@@ -15,6 +15,7 @@ import { ProductStocksModule } from './modules/product-stocks/product-stocks.mod
 import { InventoryMovementsModule } from './modules/inventory-movements/inventory-movements.module.js';
 import { SupplyStocksModule } from './modules/supply-stocks/supply-stocks.module.js';
 import { SupplyMovementsModule } from './modules/supply-movements/supply-movements.module.js';
+import { TransactionCategoriesModule } from './modules/transaction-categories/transaction-categories.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
@@ -50,6 +51,7 @@ import { CronModule } from './common/cron/cron.module.js';
     InventoryMovementsModule,
     SupplyStocksModule,
     SupplyMovementsModule,
+    TransactionCategoriesModule,
     CronModule,
   ],
   controllers: [],
