@@ -12,6 +12,27 @@ export class SupplyStocksRepository {
     return SupplyStockEntity.fromPrisma(raw);
   }
 
+  async upsert(
+    data: { supplyId: string; location: string; organizationId: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<SupplyStockEntity> {
+    const client = tx ?? this.prisma;
+    const raw = await client.supplyStock.upsert({
+      where: {
+        supplyId_location: { supplyId: data.supplyId, location: data.location },
+      },
+      update: {}, // We don't update anything if it exists
+      create: {
+        organizationId: data.organizationId,
+        supplyId: data.supplyId,
+        location: data.location,
+        quantity: 0,
+        minQuantity: 0,
+      },
+    });
+    return SupplyStockEntity.fromPrisma(raw);
+  }
+
   async findManyWithCount(params: {
     skip?: number;
     take?: number;
@@ -26,19 +47,43 @@ export class SupplyStocksRepository {
     return [rows.map(SupplyStockEntity.fromPrisma), count];
   }
 
-  async findById(id: string): Promise<SupplyStockEntity | null> {
-    const raw = await this.prisma.supplyStock.findUnique({ where: { id } });
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<SupplyStockEntity | null> {
+    const client = tx ?? this.prisma;
+    const raw = await client.supplyStock.findUnique({ where: { id } });
     return raw ? SupplyStockEntity.fromPrisma(raw) : null;
+  }
+
+  /** Load multiple stocks by their IDs in a single query (for bulk validation). */
+  async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<SupplyStockEntity[]> {
+    const client = tx ?? this.prisma;
+    const rows = await client.supplyStock.findMany({ where: { id: { in: ids } } });
+    return rows.map(SupplyStockEntity.fromPrisma);
+  }
+
+  /**
+   * Atomically increment (positive delta) or decrement (negative delta) the
+   * `quantity` field of a SupplyStock record.  Must be called inside a
+   * prisma.$transaction block when used with other writes.
+   */
+  async incrementQuantity(
+    id: string,
+    delta: Prisma.Decimal,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.supplyStock.update({
+      where: { id },
+      data: { quantity: { increment: delta } },
+    });
   }
 
   async update(
     id: string,
     data: Prisma.SupplyStockUncheckedUpdateInput,
-    currentEntity?: SupplyStockEntity
+    currentEntity?: SupplyStockEntity,
   ): Promise<SupplyStockEntity> {
-    const raw = await this.prisma.supplyStock.update({ 
-      where: { id }, 
-      data: currentEntity ? { ...data, quantity: currentEntity.quantity } : data 
+    const raw = await this.prisma.supplyStock.update({
+      where: { id },
+      data: currentEntity ? { ...data, quantity: currentEntity.quantity } : data,
     });
     return SupplyStockEntity.fromPrisma(raw);
   }
@@ -48,3 +93,4 @@ export class SupplyStocksRepository {
     return SupplyStockEntity.fromPrisma(raw);
   }
 }
+
