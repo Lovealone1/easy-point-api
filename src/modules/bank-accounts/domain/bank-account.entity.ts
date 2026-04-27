@@ -1,11 +1,12 @@
+
 import { BankAccountStatus, Prisma } from '@prisma/client';
 
 export class BankAccountEntity {
   readonly id: string;
   name: string;
-  readonly balance: Prisma.Decimal;
+  balance: Prisma.Decimal;
   currency: string;
-  readonly version: number;
+  version: number;
   accountNumber: string | null;
   qrCode: string | null;
   status: BankAccountStatus;
@@ -37,6 +38,33 @@ export class BankAccountEntity {
     this.organizationId = params.organizationId;
     this.createdAt = params.createdAt;
     this.updatedAt = params.updatedAt;
+  }
+
+  /**
+   * Incrementa el saldo de la cuenta bancaria.
+   * La persistencia en DB debe asegurar la concurrencia usando el campo version.
+   */
+  increaseBalance(amount: Prisma.Decimal): void {
+    if (amount.lessThan(0)) {
+      throw new Error('Cannot increase balance by a negative amount');
+    }
+    this.balance = this.balance.add(amount);
+    this.version += 1;
+  }
+
+  /**
+   * Decrementa el saldo de la cuenta bancaria.
+   * La persistencia en DB debe asegurar la concurrencia usando el campo version.
+   */
+  decreaseBalance(amount: Prisma.Decimal): void {
+    if (amount.lessThan(0)) {
+      throw new Error('Cannot decrease balance by a negative amount');
+    }
+    if (this.balance.lessThan(amount)) {
+      throw new Error('Insufficient funds in the bank account');
+    }
+    this.balance = this.balance.sub(amount);
+    this.version += 1;
   }
 
   static fromPrisma(raw: {
