@@ -12,6 +12,27 @@ export class ProductStocksRepository {
     return ProductStockEntity.fromPrisma(raw);
   }
 
+  async upsert(
+    data: { productId: string; location: string; organizationId: string },
+    tx?: Prisma.TransactionClient,
+  ): Promise<ProductStockEntity> {
+    const client = tx ?? this.prisma;
+    const raw = await client.productStock.upsert({
+      where: {
+        productId_location: { productId: data.productId, location: data.location },
+      },
+      update: {},
+      create: {
+        organizationId: data.organizationId,
+        productId: data.productId,
+        location: data.location,
+        quantity: 0,
+        minQuantity: 0,
+      },
+    });
+    return ProductStockEntity.fromPrisma(raw);
+  }
+
   async findManyWithCount(params: {
     skip?: number;
     take?: number;
@@ -26,19 +47,42 @@ export class ProductStocksRepository {
     return [rows.map(ProductStockEntity.fromPrisma), count];
   }
 
-  async findById(id: string): Promise<ProductStockEntity | null> {
-    const raw = await this.prisma.productStock.findUnique({ where: { id } });
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<ProductStockEntity | null> {
+    const client = tx ?? this.prisma;
+    const raw = await client.productStock.findUnique({ where: { id } });
     return raw ? ProductStockEntity.fromPrisma(raw) : null;
+  }
+
+  /** Load multiple stocks by their IDs in a single query (for bulk validation). */
+  async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<ProductStockEntity[]> {
+    const client = tx ?? this.prisma;
+    const rows = await client.productStock.findMany({ where: { id: { in: ids } } });
+    return rows.map(ProductStockEntity.fromPrisma);
+  }
+
+  /**
+   * Atomically increment (positive) or decrement (negative) the quantity field.
+   * Must be called inside a prisma.$transaction block.
+   */
+  async incrementQuantity(
+    id: string,
+    delta: Prisma.Decimal,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.productStock.update({
+      where: { id },
+      data: { quantity: { increment: delta } },
+    });
   }
 
   async update(
     id: string,
     data: Prisma.ProductStockUncheckedUpdateInput,
-    currentEntity?: ProductStockEntity
+    currentEntity?: ProductStockEntity,
   ): Promise<ProductStockEntity> {
-    const raw = await this.prisma.productStock.update({ 
-      where: { id }, 
-      data: currentEntity ? { ...data, quantity: currentEntity.quantity } : data 
+    const raw = await this.prisma.productStock.update({
+      where: { id },
+      data: currentEntity ? { ...data, quantity: currentEntity.quantity } : data,
     });
     return ProductStockEntity.fromPrisma(raw);
   }
@@ -48,3 +92,4 @@ export class ProductStocksRepository {
     return ProductStockEntity.fromPrisma(raw);
   }
 }
+
