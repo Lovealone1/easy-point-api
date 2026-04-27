@@ -85,6 +85,7 @@ model Organization {
   supplyPurchases       SupplyPurchase[]
   productPurchases      ProductPurchase[]
   sales                 Sale[]
+  transactionCategories TransactionCategory[]
 
   @@map("organizations")
 }
@@ -552,6 +553,11 @@ model FinancialTransaction {
   referenceId   String?
   referenceType String?
 
+  categoryId String?
+  category   TransactionCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  paymentMethod PaymentMethod?
+
   description String?
 
   metadata Json?
@@ -579,6 +585,7 @@ model FinancialTransaction {
 enum PurchaseStatus {
   COMPLETED
   CANCELLED
+  PENDING
 }
 
 model SupplyPurchase {
@@ -672,4 +679,38 @@ model Sale {
   @@index([organizationId])
   @@index([clientId])
   @@map("sales")
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  CHECK
+  OTHER
+}
+
+enum TransactionCategoryType {
+  INCOME
+  EXPENSE
+}
+
+model TransactionCategory {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name        String
+  description String?
+  type        TransactionCategoryType
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions FinancialTransaction[]
+
+  @@unique([organizationId, name, type])
+  @@index([organizationId])
+  @@map("transaction_categories")
 }
