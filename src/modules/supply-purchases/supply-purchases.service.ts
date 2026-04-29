@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { SupplyPurchasesRepository } from './supply-purchases.repository.js';
 import { SupplyMovementsRepository } from '../supply-movements/supply-movements.repository.js';
 import { SupplyStocksRepository } from '../supply-stocks/supply-stocks.repository.js';
+import { SupplyStockEntriesRepository } from '../supply-stock-entries/supply-stock-entries.repository.js';
 import { FinancialTransactionsService } from '../financial-transactions/financial-transactions.service.js';
 import { CreateSupplyPurchaseDto, CreateSupplyPurchaseItemDto } from './dto/create-supply-purchase.dto.js';
 import { CompleteSupplyPurchaseDto } from './dto/complete-supply-purchase.dto.js';
@@ -26,6 +27,7 @@ export class SupplyPurchasesService {
     private readonly supplyPurchasesRepository: SupplyPurchasesRepository,
     private readonly supplyMovementsRepository: SupplyMovementsRepository,
     private readonly supplyStocksRepository: SupplyStocksRepository,
+    private readonly supplyStockEntriesRepository: SupplyStockEntriesRepository,
     private readonly financialTransactionsService: FinancialTransactionsService,
   ) {}
 
@@ -92,15 +94,30 @@ export class SupplyPurchasesService {
         tx,
       );
 
-      // 4 — Increment supply stock quantities
+      // 4 — Increment supply stock quantities and CREATE physical batches (SupplyStockEntry)
       for (const item of dto.items) {
         const location = item.location || 'Principal';
         const stockId = stockMap.get(`${item.supplyId}_${location}`);
-        await this.supplyStocksRepository.incrementQuantity(
-          stockId!,
-          new Prisma.Decimal(item.quantity),
-          tx,
-        );
+        const qty = new Prisma.Decimal(item.quantity);
+
+        // Incrementar el stock global
+        await this.supplyStocksRepository.incrementQuantity(stockId!, qty, tx);
+
+        // Crear el lote físico para trazabilidad de consumo en producción
+        if (item.unitCost != null) {
+          await this.supplyStockEntriesRepository.create(
+            {
+              organizationId,
+              supplyStockId: stockId!,
+              supplyPurchaseId: purchase.id,
+              initialQuantity: qty,
+              remainingQuantity: qty,
+              unitCost: new Prisma.Decimal(item.unitCost),
+              isExhausted: false,
+            },
+            tx,
+          );
+        }
       }
 
       // 5 — If COMPLETED: create financial transaction and link it
@@ -246,15 +263,28 @@ export class SupplyPurchasesService {
         tx,
       );
 
-      // 5 — Increment supply stock quantities
+      // 5 — Increment supply stock quantities and CREATE physical batches
       for (const item of dto.items) {
         const location = item.location || 'Principal';
         const stockId = stockMap.get(`${item.supplyId}_${location}`);
-        await this.supplyStocksRepository.incrementQuantity(
-          stockId!,
-          new Prisma.Decimal(item.quantity),
-          tx,
-        );
+        const qty = new Prisma.Decimal(item.quantity);
+
+        await this.supplyStocksRepository.incrementQuantity(stockId!, qty, tx);
+
+        if (item.unitCost != null) {
+          await this.supplyStockEntriesRepository.create(
+            {
+              organizationId,
+              supplyStockId: stockId!,
+              supplyPurchaseId: purchase.id,
+              initialQuantity: qty,
+              remainingQuantity: qty,
+              unitCost: new Prisma.Decimal(item.unitCost),
+              isExhausted: false,
+            },
+            tx,
+          );
+        }
       }
 
       // 6 — Update purchase totalAmount
@@ -300,6 +330,21 @@ export class SupplyPurchasesService {
           tx,
         );
       }
+
+      // 2.5 — Check and delete unconsumed stock entries
+      const entries = await tx.supplyStockEntry.findMany({
+        where: { supplyPurchaseId: purchase.id },
+      });
+      for (const entry of entries) {
+        if (!entry.remainingQuantity.equals(entry.initialQuantity)) {
+          throw new ConflictException(
+            `Cannot cancel purchase: Stock entry ${entry.id} has already been partially consumed in production.`,
+          );
+        }
+      }
+      await tx.supplyStockEntry.deleteMany({
+        where: { supplyPurchaseId: purchase.id },
+      });
 
       // 3 — Delete movements physically
       await tx.supplyMovement.deleteMany({

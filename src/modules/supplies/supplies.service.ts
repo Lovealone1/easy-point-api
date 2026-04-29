@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SuppliesRepository } from './supplies.repository.js';
 import { SupplyStocksService } from '../supply-stocks/supply-stocks.service.js';
+import { SupplyStockEntriesRepository } from '../supply-stock-entries/supply-stock-entries.repository.js';
 import { CreateSupplyDto } from './dto/create-supply.dto.js';
 import { UpdateSupplyDto } from './dto/update-supply.dto.js';
 import { FindSuppliesDto } from './dto/find-supplies.dto.js';
@@ -26,6 +27,7 @@ export class SuppliesService {
   constructor(
     private readonly suppliesRepository: SuppliesRepository,
     private readonly supplyStocksService: SupplyStocksService,
+    private readonly supplyStockEntriesRepository: SupplyStockEntriesRepository,
   ) {}
 
   async create(createSupplyDto: CreateSupplyDto): Promise<SupplyEntity> {
@@ -41,11 +43,20 @@ export class SuppliesService {
       packageSize: new Prisma.Decimal(createSupplyDto.packageSize),
     });
 
-    await this.supplyStocksService.create({
+    // Trigger: crear SupplyStock + SupplyStockEntry inicial vacío
+    const stock = await this.supplyStocksService.create({
       supplyId: createdSupply.id,
       location: 'Principal',
       minQuantity: 0,
     });
+
+    // Entry inicial agotado (placeholder para trazabilidad)
+    // La cantidad real se cargará al registrar una compra de insumos.
+    await this.supplyStockEntriesRepository.initializeForStock(
+      stock.id,
+      organizationId,
+      createdSupply.pricePerUnit,
+    );
 
     return createdSupply;
   }
