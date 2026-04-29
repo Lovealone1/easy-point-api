@@ -84,6 +84,14 @@ export class RateLimitMiddleware implements NestMiddleware {
       return this.rateLimitersService.moderateIp;
     }
 
+    // Production module — always moderateIp (write-intensive inventory ops)
+    if (
+      routeScope.startsWith('supply-stock-entries') ||
+      routeScope.startsWith('productions')
+    ) {
+      return this.rateLimitersService.moderateIp;
+    }
+
     if (this.hasAuthenticatedUser(request)) {
       return this.isReadOperation(request)
         ? this.rateLimitersService.readOps

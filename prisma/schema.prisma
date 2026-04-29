@@ -252,8 +252,8 @@ model Supply {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stockEntries    SupplyStock[]
-  supplyMovements SupplyMovement[]
+  stockEntries     SupplyStock[]
+  supplyMovements  SupplyMovement[]
   productionUsages ProductionSupplyUsage[]
 
   @@index([organizationId])
@@ -445,7 +445,7 @@ model SupplyStock {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   supplyMovements SupplyMovement[]
   entries         SupplyStockEntry[]
 
@@ -623,7 +623,7 @@ model SupplyPurchase {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   movements    SupplyMovement[]
   stockEntries SupplyStockEntry[]
 
@@ -730,13 +730,9 @@ model TransactionCategory {
   @@map("transaction_categories")
 }
 
-// ─────────────────────────────────────────────
-// PRODUCTION MODULE
-// ─────────────────────────────────────────────
-
 enum ProductionType {
-  SELLABLE     // Produce un producto listo para la venta (vinculado a Product)
-  INTERMEDIATE // Produce un insumo interno no comercializable (ej: masa, relleno)
+  SELLABLE
+  INTERMEDIATE
 }
 
 enum ProductionStatus {
@@ -745,8 +741,6 @@ enum ProductionStatus {
   CANCELLED
 }
 
-/// Lote físico individual de un supply dentro de un SupplyStock.
-/// Permite trackear el remanente y el costo por lote con precisión.
 model SupplyStockEntry {
   id             String @id @default(uuid())
   organizationId String
@@ -754,20 +748,14 @@ model SupplyStockEntry {
   supplyStockId String
   supplyStock   SupplyStock @relation(fields: [supplyStockId], references: [id], onDelete: Cascade)
 
-  /// Compra de insumos que originó este lote (trazabilidad)
   supplyPurchaseId String?
   supplyPurchase   SupplyPurchase? @relation(fields: [supplyPurchaseId], references: [id], onDelete: SetNull)
 
-  /// Cantidad original del lote al momento de la compra (ej: 1.5 kg)
   initialQuantity   Decimal @db.Decimal(12, 4)
-  /// Cantidad remanente disponible para producción (se descuenta en cada uso)
   remainingQuantity Decimal @db.Decimal(12, 4)
 
-  /// Costo por unidad de medida del supply al momento de la compra
-  unitCost Decimal @db.Decimal(12, 4)
-
-  /// Se marca true cuando remainingQuantity llega a 0
-  isExhausted Boolean  @default(false)
+  unitCost    Decimal @db.Decimal(12, 4)
+  isExhausted Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -781,28 +769,22 @@ model SupplyStockEntry {
   @@map("supply_stock_entries")
 }
 
-/// Evento de producción. Puede ser un producto para la venta (SELLABLE)
-/// o un insumo intermedio interno (INTERMEDIATE, sin relación a Product).
 model Production {
   id             String @id @default(uuid())
   organizationId String
 
-  /// Nombre descriptivo del lote (ej: "Producción cuchareables de fresa - Lote #12")
   name           String
   productionDate DateTime
 
   type   ProductionType   @default(SELLABLE)
   status ProductionStatus @default(DRAFT)
 
-  /// Solo para type = SELLABLE. Producto resultante que incrementará el stock.
   productId String?
   product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
-  /// Cantidad del producto/insumo producido
   quantityProduced Decimal       @db.Decimal(12, 4)
   unitOfMeasure    UnitOfMeasure
 
-  /// Costo total calculado de los insumos consumidos en esta producción
   totalCost Decimal @default(0) @db.Decimal(19, 4)
 
   notes String?
@@ -813,12 +795,12 @@ model Production {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  supplyUsages       ProductionSupplyUsage[]
-  /// Movimiento de inventario de entrada (stock del producto producido)
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplyUsages ProductionSupplyUsage[]
+
   inventoryMovements InventoryMovement[]
-  /// Movimientos de supply de salida (descuento de insumos consumidos)
-  supplyMovements    SupplyMovement[]
+
+  supplyMovements SupplyMovement[]
 
   @@index([organizationId])
   @@index([productId])
@@ -827,7 +809,6 @@ model Production {
   @@map("productions")
 }
 
-/// Detalle de qué insumos (y de qué lote físico) se consumieron en una producción.
 model ProductionSupplyUsage {
   id           String     @id @default(uuid())
   productionId String
@@ -836,17 +817,12 @@ model ProductionSupplyUsage {
   supplyId String
   supply   Supply @relation(fields: [supplyId], references: [id], onDelete: Cascade)
 
-  /// Lote físico específico del que se consumió (null solo si UnitOfMeasure = UNIT
-  /// y el lote se agotó completamente antes de crear el entry)
   supplyStockEntryId String?
   supplyStockEntry   SupplyStockEntry? @relation(fields: [supplyStockEntryId], references: [id], onDelete: SetNull)
+  quantityUsed       Decimal           @db.Decimal(12, 4)
+  unitCost           Decimal           @db.Decimal(12, 4)
 
-  /// Cantidad consumida del insumo (en la unidad de medida del supply)
-  quantityUsed Decimal @db.Decimal(12, 4)
-  /// Costo por unidad de medida al momento del consumo
-  unitCost     Decimal @db.Decimal(12, 4)
-  /// quantityUsed × unitCost
-  totalCost    Decimal @db.Decimal(12, 4)
+  totalCost Decimal @db.Decimal(12, 4)
 
   createdAt DateTime @default(now())
 
