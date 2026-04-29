@@ -51,6 +51,7 @@ model User {
   supplyPurchases       SupplyPurchase[]
   productPurchases      ProductPurchase[]
   sales                 Sale[]
+  productions           Production[]
 
   @@map("users")
 }
@@ -79,6 +80,7 @@ model Organization {
   productStocks         ProductStock[]
   inventoryMovements    InventoryMovement[]
   supplyStocks          SupplyStock[]
+  supplyStockEntries    SupplyStockEntry[]
   supplyMovements       SupplyMovement[]
   bankAccounts          BankAccount[]
   financialTransactions FinancialTransaction[]
@@ -86,6 +88,7 @@ model Organization {
   productPurchases      ProductPurchase[]
   sales                 Sale[]
   transactionCategories TransactionCategory[]
+  productions           Production[]
 
   @@map("organizations")
 }
@@ -249,8 +252,9 @@ model Supply {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stockEntries    SupplyStock[]
-  supplyMovements SupplyMovement[]
+  stockEntries     SupplyStock[]
+  supplyMovements  SupplyMovement[]
+  productionUsages ProductionSupplyUsage[]
 
   @@index([organizationId])
   @@index([name])
@@ -312,6 +316,7 @@ model Product {
 
   stockEntries       ProductStock[]
   inventoryMovements InventoryMovement[]
+  productions        Production[]
 
   @@index([organizationId])
   @@index([categoryId])
@@ -403,6 +408,9 @@ model InventoryMovement {
   saleId String?
   sale   Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
 
+  productionId String?
+  production   Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+
   referenceId       String?
   referenceType     String?
   performedByUserId String?
@@ -416,6 +424,7 @@ model InventoryMovement {
   @@index([productId])
   @@index([stockId])
   @@index([type])
+  @@index([productionId])
   @@index([createdAt])
   @@map("inventory_movements")
 }
@@ -436,8 +445,9 @@ model SupplyStock {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   supplyMovements SupplyMovement[]
+  entries         SupplyStockEntry[]
 
   @@unique([supplyId, location])
   @@index([organizationId])
@@ -473,6 +483,9 @@ model SupplyMovement {
   supplyPurchaseId String?
   supplyPurchase   SupplyPurchase? @relation(fields: [supplyPurchaseId], references: [id], onDelete: SetNull)
 
+  productionId String?
+  production   Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+
   referenceId       String?
   referenceType     String?
   performedByUserId String?
@@ -486,6 +499,7 @@ model SupplyMovement {
   @@index([supplyId])
   @@index([stockId])
   @@index([type])
+  @@index([productionId])
   @@index([createdAt])
   @@map("supply_movements")
 }
@@ -609,8 +623,9 @@ model SupplyPurchase {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   movements    SupplyMovement[]
+  stockEntries SupplyStockEntry[]
 
   @@index([organizationId])
   @@index([supplierId])
@@ -713,4 +728,106 @@ model TransactionCategory {
   @@unique([organizationId, name, type])
   @@index([organizationId])
   @@map("transaction_categories")
+}
+
+enum ProductionType {
+  SELLABLE
+  INTERMEDIATE
+}
+
+enum ProductionStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+model SupplyStockEntry {
+  id             String @id @default(uuid())
+  organizationId String
+
+  supplyStockId String
+  supplyStock   SupplyStock @relation(fields: [supplyStockId], references: [id], onDelete: Cascade)
+
+  supplyPurchaseId String?
+  supplyPurchase   SupplyPurchase? @relation(fields: [supplyPurchaseId], references: [id], onDelete: SetNull)
+
+  initialQuantity   Decimal @db.Decimal(12, 4)
+  remainingQuantity Decimal @db.Decimal(12, 4)
+
+  unitCost    Decimal @db.Decimal(12, 4)
+  isExhausted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productionUsages ProductionSupplyUsage[]
+
+  @@index([supplyStockId])
+  @@index([organizationId])
+  @@index([isExhausted])
+  @@map("supply_stock_entries")
+}
+
+model Production {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name           String
+  productionDate DateTime
+
+  type   ProductionType   @default(SELLABLE)
+  status ProductionStatus @default(DRAFT)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  quantityProduced Decimal       @db.Decimal(12, 4)
+  unitOfMeasure    UnitOfMeasure
+
+  totalCost Decimal @default(0) @db.Decimal(19, 4)
+
+  notes String?
+
+  performedByUserId String?
+  performedBy       User?   @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplyUsages ProductionSupplyUsage[]
+
+  inventoryMovements InventoryMovement[]
+
+  supplyMovements SupplyMovement[]
+
+  @@index([organizationId])
+  @@index([productId])
+  @@index([productionDate])
+  @@index([status])
+  @@map("productions")
+}
+
+model ProductionSupplyUsage {
+  id           String     @id @default(uuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+
+  supplyId String
+  supply   Supply @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+
+  supplyStockEntryId String?
+  supplyStockEntry   SupplyStockEntry? @relation(fields: [supplyStockEntryId], references: [id], onDelete: SetNull)
+  quantityUsed       Decimal           @db.Decimal(12, 4)
+  unitCost           Decimal           @db.Decimal(12, 4)
+
+  totalCost Decimal @db.Decimal(12, 4)
+
+  createdAt DateTime @default(now())
+
+  @@index([productionId])
+  @@index([supplyId])
+  @@index([supplyStockEntryId])
+  @@map("production_supply_usages")
 }

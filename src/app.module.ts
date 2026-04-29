@@ -21,6 +21,8 @@ import { FinancialTransactionsModule } from './modules/financial-transactions/fi
 import { SupplyPurchasesModule } from './modules/supply-purchases/supply-purchases.module.js';
 import { ProductPurchasesModule } from './modules/product-purchases/product-purchases.module.js';
 import { SalesModule } from './modules/sales/sales.module.js';
+import { SupplyStockEntriesModule } from './modules/supply-stock-entries/supply-stock-entries.module.js';
+import { ProductionsModule } from './modules/productions/productions.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
@@ -62,6 +64,8 @@ import { CronModule } from './common/cron/cron.module.js';
     SupplyPurchasesModule,
     ProductPurchasesModule,
     SalesModule,
+    SupplyStockEntriesModule,
+    ProductionsModule,
     CronModule,
   ],
   controllers: [],
