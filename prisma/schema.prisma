@@ -229,8 +229,6 @@ enum UnitOfMeasure {
   GRAM
   MILLILITER
   UNIT
-  KILOGRAM
-  LITER
 }
 
 model Supply {
