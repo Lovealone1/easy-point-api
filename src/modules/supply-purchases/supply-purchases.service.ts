@@ -100,9 +100,6 @@ export class SupplyPurchasesService {
         const stockId = stockMap.get(`${item.supplyId}_${location}`);
         const qty = new Prisma.Decimal(item.quantity);
 
-        // Incrementar el stock global
-        await this.supplyStocksRepository.incrementQuantity(stockId!, qty, tx);
-
         // Crear el lote físico para trazabilidad de consumo en producción
         if (item.unitCost != null) {
           await this.supplyStockEntriesRepository.create(
@@ -118,6 +115,9 @@ export class SupplyPurchasesService {
             tx,
           );
         }
+
+        // Sincronizar el stock global (Math.ceil entero)
+        await this.supplyStocksRepository.syncQuantityWithEntries(stockId!, tx);
       }
 
       // 5 — If COMPLETED: create financial transaction and link it
@@ -269,8 +269,6 @@ export class SupplyPurchasesService {
         const stockId = stockMap.get(`${item.supplyId}_${location}`);
         const qty = new Prisma.Decimal(item.quantity);
 
-        await this.supplyStocksRepository.incrementQuantity(stockId!, qty, tx);
-
         if (item.unitCost != null) {
           await this.supplyStockEntriesRepository.create(
             {
@@ -285,6 +283,8 @@ export class SupplyPurchasesService {
             tx,
           );
         }
+
+        await this.supplyStocksRepository.syncQuantityWithEntries(stockId!, tx);
       }
 
       // 6 — Update purchase totalAmount
@@ -317,19 +317,10 @@ export class SupplyPurchasesService {
         throw new ConflictException('Purchase is already cancelled');
       }
 
-      // 1 — Get all movements associated with this purchase
+      // 2 — Get all movements associated with this purchase
       const movements = await tx.supplyMovement.findMany({
         where: { supplyPurchaseId: purchase.id },
       });
-
-      // 2 — Reverse stock quantities
-      for (const mov of movements) {
-        await this.supplyStocksRepository.incrementQuantity(
-          mov.stockId,
-          new Prisma.Decimal(mov.quantity).negated(), // Subtract
-          tx,
-        );
-      }
 
       // 2.5 — Check and delete unconsumed stock entries
       const entries = await tx.supplyStockEntry.findMany({
@@ -342,9 +333,16 @@ export class SupplyPurchasesService {
           );
         }
       }
+      
+      // Delete entries first
       await tx.supplyStockEntry.deleteMany({
         where: { supplyPurchaseId: purchase.id },
       });
+
+      // Sync stock quantities
+      for (const mov of movements) {
+        await this.supplyStocksRepository.syncQuantityWithEntries(mov.stockId, tx);
+      }
 
       // 3 — Delete movements physically
       await tx.supplyMovement.deleteMany({

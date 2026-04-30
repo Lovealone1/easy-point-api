@@ -26,9 +26,7 @@ import {
 /** Unidades que permiten consumo parcial de un lote */
 const MEASURABLE_UNITS = new Set<UnitOfMeasure>([
   UnitOfMeasure.GRAM,
-  UnitOfMeasure.KILOGRAM,
   UnitOfMeasure.MILLILITER,
-  UnitOfMeasure.LITER,
 ]);
 
 @Injectable()
@@ -120,11 +118,13 @@ export class ProductionsService {
       }
 
       const isMeasurable = MEASURABLE_UNITS.has(supply.unitOfMeasure);
-      const required = new Prisma.Decimal(usage.quantityUsed);
+      const requiredInPackages = isMeasurable
+        ? new Prisma.Decimal(usage.quantityUsed).dividedBy(supply.packageSize)
+        : new Prisma.Decimal(usage.quantityUsed);
 
-      if (isMeasurable && new Prisma.Decimal(stock.quantity).lessThan(required)) {
+      if (isMeasurable && new Prisma.Decimal(stock.quantity).lessThan(requiredInPackages)) {
         throw new UnprocessableEntityException(
-          `Insufficient stock for supply "${supply.name}": required ${required}, available ${stock.quantity}`,
+          `Insufficient stock for supply "${supply.name}": required ${requiredInPackages.toFixed(2)} packages (you asked for ${usage.quantityUsed}), available ${stock.quantity} packages`,
         );
       }
       // Para UNIT: verificamos que haya al menos 1 unidad
@@ -169,7 +169,13 @@ export class ProductionsService {
         const supply = supplyMap.get(usage.supplyId)!;
         const stock = stockMap.get(usage.supplyId)!;
         const isMeasurable = MEASURABLE_UNITS.has(supply.unitOfMeasure);
-        let remaining = new Prisma.Decimal(usage.quantityUsed);
+        
+        // Convertir la cantidad ingresada (ej. 300 gramos) a fracción de paquete (ej. 300 / 1000 = 0.3 paquetes)
+        const quantityToConsumeInPackages = isMeasurable
+          ? new Prisma.Decimal(usage.quantityUsed).dividedBy(supply.packageSize)
+          : new Prisma.Decimal(usage.quantityUsed);
+
+        let remaining = quantityToConsumeInPackages;
         let usageCostTotal = new Prisma.Decimal(0);
         let lastEntryId: string | null = null;
 
@@ -243,9 +249,11 @@ export class ProductionsService {
 
         totalCost = totalCost.plus(usageCostTotal);
 
-        // Actualizar SupplyStock.quantity (decremento)
-        const qtyUsed = new Prisma.Decimal(usage.quantityUsed);
-        await this.supplyStocksRepository.incrementQuantity(stock.id, qtyUsed.negated(), tx);
+        // Actualizar SupplyStock.quantity usando la sincronización entera (Math.ceil)
+        await this.supplyStocksRepository.syncQuantityWithEntries(stock.id, tx);
+
+        // Calcular costo unitario promedio ponderado basado en el consumo FIFO
+        const averageUnitCost = usageCostTotal.dividedBy(quantityToConsumeInPackages);
 
         // SupplyMovement PRODUCTION
         await tx.supplyMovement.create({
@@ -253,8 +261,8 @@ export class ProductionsService {
             organizationId,
             supplyId: usage.supplyId,
             stockId: stock.id,
-            quantity: new Prisma.Decimal(usage.quantityUsed).negated(),
-            unitCost: supply.pricePerUnit,
+            quantity: quantityToConsumeInPackages.negated(),
+            unitCost: averageUnitCost,
             type: SupplyMovementType.PRODUCTION,
             productionId: production.id,
             performedByUserId: userId,
