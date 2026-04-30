@@ -76,6 +76,31 @@ export class SupplyStocksRepository {
     });
   }
 
+  /**
+   * Recalculates the SupplyStock quantity based on the ceiling of the sum of all its entries' remaining quantities.
+   * This guarantees that the stock only reflects whole physical packages.
+   */
+  async syncQuantityWithEntries(
+    stockId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const entries = await tx.supplyStockEntry.findMany({
+      where: { supplyStockId: stockId },
+    });
+
+    let totalRemaining = new Prisma.Decimal(0);
+    for (const entry of entries) {
+      totalRemaining = totalRemaining.plus(entry.remainingQuantity);
+    }
+
+    const ceilQuantity = new Prisma.Decimal(Math.ceil(totalRemaining.toNumber()));
+
+    await tx.supplyStock.update({
+      where: { id: stockId },
+      data: { quantity: ceilQuantity },
+    });
+  }
+
   async update(
     id: string,
     data: Prisma.SupplyStockUncheckedUpdateInput,

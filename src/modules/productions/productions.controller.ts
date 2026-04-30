@@ -74,7 +74,7 @@ export class ProductionsController {
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded (moderateIp).' })
   create(
     @Body() dto: CreateProductionDto,
-    @CurrentUser('id') userId: string,
+    @CurrentUser('sub') userId: string,
   ) {
     return this.productionsService.create(dto, userId);
   }
