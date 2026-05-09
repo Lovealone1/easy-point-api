@@ -12,7 +12,7 @@ import {
   IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ProductionType, UnitOfMeasure } from '@prisma/client';
+import { ProductionType, UnitOfMeasure, ProductionStatus } from '@prisma/client';
 
 export class ProductionSupplyUsageInputDto {
   @ApiProperty({ description: 'ID del Supply a consumir' })
@@ -62,6 +62,11 @@ export class CreateProductionDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ enum: ProductionStatus, description: 'Estado inicial. Por defecto es COMPLETED' })
+  @IsOptional()
+  @IsEnum(ProductionStatus)
+  status?: ProductionStatus;
 
   @ApiProperty({
     type: [ProductionSupplyUsageInputDto],
