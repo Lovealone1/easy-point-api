@@ -80,16 +80,15 @@ export class ProductionsService {
    * 6. Si SELLABLE: incrementa ProductStock y crea InventoryMovement PRODUCTION.
    * 7. Persiste Production con status=COMPLETED y totalCost calculado.
    */
+  
   async create(dto: CreateProductionDto, userId: string): Promise<ProductionEntity> {
     const organizationId = getTenantId();
     if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
 
-    // ── Validación de negocio ──────────────────────────────────────────────
     if (dto.type === ProductionType.SELLABLE && !dto.productId) {
       throw new BadRequestException('productId is required for SELLABLE productions');
     }
 
-    // Cargar datos de los supplies a consumir
     const supplyIds = dto.supplies.map((s) => s.supplyId);
     const supplies = await this.prisma.supply.findMany({
       where: { id: { in: supplyIds }, organizationId },
@@ -99,17 +98,119 @@ export class ProductionsService {
       throw new NotFoundException('One or more supplies not found in this organization');
     }
 
-    const supplyMap = new Map(supplies.map((s) => [s.id, s]));
+    const isDraft = dto.status === ProductionStatus.DRAFT;
 
-    // Cargar los stocks de cada supply
-    const supplyStocks = await this.prisma.supplyStock.findMany({
+    return this.prisma.$transaction(async (tx) => {
+      const production = await this.productionsRepository.create(
+        {
+          organizationId,
+          name: dto.name,
+          productionDate: new Date(dto.productionDate),
+          type: dto.type,
+          status: isDraft ? ProductionStatus.DRAFT : ProductionStatus.COMPLETED,
+          productId: dto.productId ?? null,
+          quantityProduced: new Prisma.Decimal(dto.quantityProduced),
+          unitOfMeasure: dto.unitOfMeasure,
+          totalCost: new Prisma.Decimal(0),
+          notes: dto.notes ?? null,
+          performedByUserId: userId,
+        },
+        tx,
+      );
+
+      if (isDraft) {
+        // Just save intended usages
+        await tx.productionSupplyUsage.createMany({
+          data: dto.supplies.map((s) => ({
+            productionId: production.id,
+            supplyId: s.supplyId,
+            supplyStockEntryId: null,
+            quantityUsed: new Prisma.Decimal(s.quantityUsed),
+            unitCost: new Prisma.Decimal(0),
+            totalCost: new Prisma.Decimal(0),
+          })),
+        });
+        return production;
+      }
+
+      // If not draft, process completion immediately
+      return this.processProductionCompletion(
+        tx,
+        organizationId,
+        userId,
+        production,
+        dto.supplies,
+        supplies,
+      );
+    });
+  }
+
+  async complete(id: string, userId: string): Promise<ProductionEntity> {
+    const organizationId = getTenantId();
+    if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
+
+    const production = await this.findOne(id);
+    if (!production.canComplete()) {
+      throw new BadRequestException(
+        `Production ${id} cannot be completed (status: ${production.status})`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Get intended supplies
+      const usages = await tx.productionSupplyUsage.findMany({
+        where: { productionId: id },
+      });
+
+      if (usages.length === 0) {
+        throw new UnprocessableEntityException('Production has no supplies defined');
+      }
+
+      const suppliesInput = usages.map((u) => ({
+        supplyId: u.supplyId,
+        quantityUsed: u.quantityUsed.toNumber(),
+      }));
+
+      const supplyIds = suppliesInput.map((s) => s.supplyId);
+      const supplies = await tx.supply.findMany({
+        where: { id: { in: supplyIds }, organizationId },
+      });
+
+      // Clear draft usages
+      await tx.productionSupplyUsage.deleteMany({
+        where: { productionId: id },
+      });
+
+      return this.processProductionCompletion(
+        tx,
+        organizationId,
+        userId,
+        production,
+        suppliesInput,
+        supplies,
+      );
+    });
+  }
+
+  private async processProductionCompletion(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+    production: ProductionEntity,
+    suppliesInput: { supplyId: string; quantityUsed: number }[],
+    suppliesData: any[],
+  ): Promise<ProductionEntity> {
+    const supplyMap = new Map(suppliesData.map((s) => [s.id, s]));
+
+    const supplyIds = suppliesInput.map((s) => s.supplyId);
+    const supplyStocks = await tx.supplyStock.findMany({
       where: { supplyId: { in: supplyIds }, organizationId },
     });
     const stockMap = new Map(supplyStocks.map((s) => [s.supplyId, s]));
 
-    // Verificar disponibilidad pre-transacción (lectura optimista rápida)
-    for (const usage of dto.supplies) {
-      const supply = supplyMap.get(usage.supplyId)!;
+    // Validation
+    for (const usage of suppliesInput) {
+      const supply = supplyMap.get(usage.supplyId);
       const stock = stockMap.get(usage.supplyId);
       if (!stock) {
         throw new UnprocessableEntityException(
@@ -127,7 +228,6 @@ export class ProductionsService {
           `Insufficient stock for supply "${supply.name}": required ${requiredInPackages.toFixed(2)} packages (you asked for ${usage.quantityUsed}), available ${stock.quantity} packages`,
         );
       }
-      // Para UNIT: verificamos que haya al menos 1 unidad
       if (!isMeasurable && new Prisma.Decimal(stock.quantity).lessThan(1)) {
         throw new UnprocessableEntityException(
           `No units available for supply "${supply.name}"`,
@@ -135,195 +235,158 @@ export class ProductionsService {
       }
     }
 
-    // ── Transacción atómica ────────────────────────────────────────────────
-    return this.prisma.$transaction(async (tx) => {
-      let totalCost = new Prisma.Decimal(0);
-      const usageRecords: Array<{
-        supplyId: string;
-        supplyStockEntryId: string | null;
-        quantityUsed: Prisma.Decimal;
-        unitCost: Prisma.Decimal;
-        totalCost: Prisma.Decimal;
-      }> = [];
+    let totalCost = new Prisma.Decimal(0);
+    const usageRecords: Array<{
+      supplyId: string;
+      supplyStockEntryId: string | null;
+      quantityUsed: Prisma.Decimal;
+      unitCost: Prisma.Decimal;
+      totalCost: Prisma.Decimal;
+    }> = [];
 
-      // ── Crear producción en DRAFT ────────────────────────────────────────
-      const production = await this.productionsRepository.create(
-        {
-          organizationId,
-          name: dto.name,
-          productionDate: new Date(dto.productionDate),
-          type: dto.type,
-          status: ProductionStatus.DRAFT,
-          productId: dto.productId ?? null,
-          quantityProduced: new Prisma.Decimal(dto.quantityProduced),
-          unitOfMeasure: dto.unitOfMeasure,
-          totalCost: new Prisma.Decimal(0),
-          notes: dto.notes ?? null,
-          performedByUserId: userId,
-        },
-        tx,
-      );
+    // Consume FIFO
+    for (const usage of suppliesInput) {
+      const supply = supplyMap.get(usage.supplyId)!;
+      const stock = stockMap.get(usage.supplyId)!;
+      const isMeasurable = MEASURABLE_UNITS.has(supply.unitOfMeasure);
+      
+      const quantityToConsumeInPackages = isMeasurable
+        ? new Prisma.Decimal(usage.quantityUsed).dividedBy(supply.packageSize)
+        : new Prisma.Decimal(usage.quantityUsed);
 
-      // ── Consumir insumos FIFO ────────────────────────────────────────────
-      for (const usage of dto.supplies) {
-        const supply = supplyMap.get(usage.supplyId)!;
-        const stock = stockMap.get(usage.supplyId)!;
-        const isMeasurable = MEASURABLE_UNITS.has(supply.unitOfMeasure);
-        
-        // Convertir la cantidad ingresada (ej. 300 gramos) a fracción de paquete (ej. 300 / 1000 = 0.3 paquetes)
-        const quantityToConsumeInPackages = isMeasurable
-          ? new Prisma.Decimal(usage.quantityUsed).dividedBy(supply.packageSize)
-          : new Prisma.Decimal(usage.quantityUsed);
+      let remaining = quantityToConsumeInPackages;
+      let usageCostTotal = new Prisma.Decimal(0);
 
-        let remaining = quantityToConsumeInPackages;
-        let usageCostTotal = new Prisma.Decimal(0);
-        let lastEntryId: string | null = null;
-
-        if (isMeasurable) {
-          // Consumo parcial FIFO a través de lotes
-          const entries = await this.entriesRepository.findAvailableByStockId(stock.id, tx);
-
-          if (entries.length === 0) {
-            throw new UnprocessableEntityException(
-              `No available stock entries for supply "${supply.name}"`,
-            );
-          }
-
-          for (const entry of entries) {
-            if (remaining.isZero()) break;
-
-            const toConsume = Prisma.Decimal.min(remaining, entry.remainingQuantity);
-            const entryCost = entry.unitCost.times(toConsume);
-
-            entry.consume(toConsume);
-            await this.entriesRepository.updateConsumption(
-              entry.id,
-              entry.remainingQuantity,
-              entry.isExhausted,
-              tx,
-            );
-
-            usageCostTotal = usageCostTotal.plus(entryCost);
-            remaining = remaining.minus(toConsume);
-            lastEntryId = entry.id;
-
-            // Crear registro de uso por lote consumido
-            usageRecords.push({
-              supplyId: usage.supplyId,
-              supplyStockEntryId: entry.id,
-              quantityUsed: toConsume,
-              unitCost: entry.unitCost,
-              totalCost: entryCost,
-            });
-          }
-
-          if (!remaining.isZero()) {
-            throw new UnprocessableEntityException(
-              `Insufficient measurable stock for supply "${supply.name}"`,
-            );
-          }
-        } else {
-          // UNIT: agota lotes completos hasta cubrir la cantidad
-          const entries = await this.entriesRepository.findAvailableByStockId(stock.id, tx);
-          let unitsToConsume = Math.ceil(new Prisma.Decimal(usage.quantityUsed).toNumber());
-
-          for (const entry of entries) {
-            if (unitsToConsume <= 0) break;
-            const consumed = entry.consume(entry.remainingQuantity, true);
-            await this.entriesRepository.updateConsumption(entry.id, entry.remainingQuantity, true, tx);
-
-            const entryCost = entry.unitCost.times(consumed);
-            usageCostTotal = usageCostTotal.plus(entryCost);
-            lastEntryId = entry.id;
-
-            usageRecords.push({
-              supplyId: usage.supplyId,
-              supplyStockEntryId: entry.id,
-              quantityUsed: consumed,
-              unitCost: entry.unitCost,
-              totalCost: entryCost,
-            });
-            unitsToConsume -= 1;
-          }
+      if (isMeasurable) {
+        const entries = await this.entriesRepository.findAvailableByStockId(stock.id, tx);
+        if (entries.length === 0) {
+          throw new UnprocessableEntityException(
+            `No available stock entries for supply "${supply.name}"`,
+          );
         }
 
-        totalCost = totalCost.plus(usageCostTotal);
+        for (const entry of entries) {
+          if (remaining.isZero()) break;
+          const toConsume = Prisma.Decimal.min(remaining, entry.remainingQuantity);
+          const entryCost = entry.unitCost.times(toConsume);
 
-        // Actualizar SupplyStock.quantity usando la sincronización entera (Math.ceil)
-        await this.supplyStocksRepository.syncQuantityWithEntries(stock.id, tx);
+          entry.consume(toConsume);
+          await this.entriesRepository.updateConsumption(
+            entry.id,
+            entry.remainingQuantity,
+            entry.isExhausted,
+            tx,
+          );
 
-        // Calcular costo unitario promedio ponderado basado en el consumo FIFO
-        const averageUnitCost = usageCostTotal.dividedBy(quantityToConsumeInPackages);
+          usageCostTotal = usageCostTotal.plus(entryCost);
+          remaining = remaining.minus(toConsume);
 
-        // SupplyMovement PRODUCTION
-        await tx.supplyMovement.create({
-          data: {
-            organizationId,
+          usageRecords.push({
             supplyId: usage.supplyId,
-            stockId: stock.id,
-            quantity: quantityToConsumeInPackages.negated(),
-            unitCost: averageUnitCost,
-            type: SupplyMovementType.PRODUCTION,
-            productionId: production.id,
-            performedByUserId: userId,
-            reason: `Producción: ${dto.name}`,
-          },
-        });
+            supplyStockEntryId: entry.id,
+            quantityUsed: toConsume,
+            unitCost: entry.unitCost,
+            totalCost: entryCost,
+          });
+        }
+
+        if (!remaining.isZero()) {
+          throw new UnprocessableEntityException(
+            `Insufficient measurable stock for supply "${supply.name}"`,
+          );
+        }
+      } else {
+        const entries = await this.entriesRepository.findAvailableByStockId(stock.id, tx);
+        let unitsToConsume = Math.ceil(new Prisma.Decimal(usage.quantityUsed).toNumber());
+
+        for (const entry of entries) {
+          if (unitsToConsume <= 0) break;
+          const consumed = entry.consume(entry.remainingQuantity, true);
+          await this.entriesRepository.updateConsumption(entry.id, entry.remainingQuantity, true, tx);
+
+          const entryCost = entry.unitCost.times(consumed);
+          usageCostTotal = usageCostTotal.plus(entryCost);
+
+          usageRecords.push({
+            supplyId: usage.supplyId,
+            supplyStockEntryId: entry.id,
+            quantityUsed: consumed,
+            unitCost: entry.unitCost,
+            totalCost: entryCost,
+          });
+          unitsToConsume -= 1;
+        }
       }
 
-      // ── Insertar ProductionSupplyUsage records ───────────────────────────
-      await tx.productionSupplyUsage.createMany({
-        data: usageRecords.map((r) => ({
+      totalCost = totalCost.plus(usageCostTotal);
+
+      await this.supplyStocksRepository.syncQuantityWithEntries(stock.id, tx);
+
+      const averageUnitCost = usageCostTotal.dividedBy(quantityToConsumeInPackages);
+
+      await tx.supplyMovement.create({
+        data: {
+          organizationId,
+          supplyId: usage.supplyId,
+          stockId: stock.id,
+          quantity: quantityToConsumeInPackages.negated(),
+          unitCost: averageUnitCost,
+          type: SupplyMovementType.PRODUCTION,
           productionId: production.id,
-          supplyId: r.supplyId,
-          supplyStockEntryId: r.supplyStockEntryId,
-          quantityUsed: r.quantityUsed,
-          unitCost: r.unitCost,
-          totalCost: r.totalCost,
-        })),
+          performedByUserId: userId,
+          reason: `Producción: ${production.name}`,
+        },
+      });
+    }
+
+    await tx.productionSupplyUsage.createMany({
+      data: usageRecords.map((r) => ({
+        productionId: production.id,
+        supplyId: r.supplyId,
+        supplyStockEntryId: r.supplyStockEntryId,
+        quantityUsed: r.quantityUsed,
+        unitCost: r.unitCost,
+        totalCost: r.totalCost,
+      })),
+    });
+
+    if (production.isSellable() && production.productId) {
+      const productStock = await tx.productStock.upsert({
+        where: {
+          productId_location: { productId: production.productId, location: 'Principal' },
+        },
+        update: {
+          quantity: { increment: new Prisma.Decimal(production.quantityProduced) },
+        },
+        create: {
+          organizationId,
+          productId: production.productId,
+          location: 'Principal',
+          quantity: new Prisma.Decimal(production.quantityProduced),
+          minQuantity: new Prisma.Decimal(0),
+        },
       });
 
-      // ── Si SELLABLE: incrementar ProductStock + InventoryMovement ────────
-      if (dto.type === ProductionType.SELLABLE && dto.productId) {
-        // Upsert ProductStock (Principal)
-        const productStock = await tx.productStock.upsert({
-          where: {
-            productId_location: { productId: dto.productId, location: 'Principal' },
-          },
-          update: {
-            quantity: { increment: new Prisma.Decimal(dto.quantityProduced) },
-          },
-          create: {
-            organizationId,
-            productId: dto.productId,
-            location: 'Principal',
-            quantity: new Prisma.Decimal(dto.quantityProduced),
-            minQuantity: new Prisma.Decimal(0),
-          },
-        });
+      await tx.inventoryMovement.create({
+        data: {
+          organizationId,
+          productId: production.productId,
+          stockId: productStock.id,
+          quantity: new Prisma.Decimal(production.quantityProduced),
+          unitCost: totalCost.dividedBy(production.quantityProduced),
+          type: MovementType.PRODUCTION,
+          productionId: production.id,
+          performedByUserId: userId,
+          reason: `Producción completada: ${production.name}`,
+        },
+      });
+    }
 
-        await tx.inventoryMovement.create({
-          data: {
-            organizationId,
-            productId: dto.productId,
-            stockId: productStock.id,
-            quantity: new Prisma.Decimal(dto.quantityProduced),
-            unitCost: totalCost.dividedBy(dto.quantityProduced),
-            type: MovementType.PRODUCTION,
-            productionId: production.id,
-            performedByUserId: userId,
-            reason: `Producción completada: ${dto.name}`,
-          },
-        });
-      }
-
-      // ── Actualizar producción a COMPLETED con totalCost ──────────────────
-      return this.productionsRepository.update(
-        production.id,
-        { status: ProductionStatus.COMPLETED, totalCost },
-        tx,
-      );
-    });
+    return this.productionsRepository.update(
+      production.id,
+      { status: ProductionStatus.COMPLETED, totalCost },
+      tx,
+    );
   }
 
   // ─── Cancelación ──────────────────────────────────────────────────────────
@@ -340,9 +403,76 @@ export class ProductionsService {
 
   async remove(id: string): Promise<ProductionEntity> {
     const production = await this.findOne(id);
+    
     if (production.isCompleted()) {
-      throw new BadRequestException('Cannot delete a completed production');
+      await this.prisma.$transaction(async (tx) => {
+        // 1. Revert Inventory Movement & Product Stock (If Sellable)
+        if (production.isSellable() && production.productId) {
+          const prodId = production.productId;
+          await tx.inventoryMovement.deleteMany({
+            where: { productionId: id },
+          });
+
+          await tx.productStock.updateMany({
+            where: {
+              organizationId: production.organizationId,
+              productId: prodId,
+              location: 'Principal',
+            },
+            data: {
+              quantity: { decrement: new Prisma.Decimal(production.quantityProduced) },
+            },
+          });
+        }
+
+        // 2. Revert Supply Movements
+        await tx.supplyMovement.deleteMany({
+          where: { productionId: id },
+        });
+
+        // 3. Revert Supply Stock Entries
+        const usages = await tx.productionSupplyUsage.findMany({
+          where: { productionId: id },
+        });
+
+        const affectedStockIds = new Set<string>();
+
+        for (const usage of usages) {
+          if (!usage.supplyStockEntryId) continue;
+
+          const entry = await tx.supplyStockEntry.findUnique({
+            where: { id: usage.supplyStockEntryId },
+          });
+          if (entry) {
+            affectedStockIds.add(entry.supplyStockId);
+            await tx.supplyStockEntry.update({
+              where: { id: entry.id },
+              data: {
+                remainingQuantity: { increment: usage.quantityUsed },
+                isExhausted: false,
+              },
+            });
+          }
+        }
+
+        // 4. Delete Usages
+        await tx.productionSupplyUsage.deleteMany({
+          where: { productionId: id },
+        });
+
+        // 5. Sync Supply Stocks (Math.ceil over restored fractions)
+        for (const stockId of affectedStockIds) {
+          await this.supplyStocksRepository.syncQuantityWithEntries(stockId, tx);
+        }
+
+        // 6. Finally, delete the Production
+        await tx.production.delete({ where: { id } });
+      });
+
+      return production;
     }
+
+    // For DRAFT or CANCELLED
     return this.productionsRepository.delete(id);
   }
 }
