@@ -1,6 +1,6 @@
 import { IsUUID, IsEnum, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Role } from '../../../common/enums/role.enum.js';
 
 export class CreateOrganizationUserDto {
   @ApiProperty({ description: 'The ID of the user to assign', format: 'uuid' })

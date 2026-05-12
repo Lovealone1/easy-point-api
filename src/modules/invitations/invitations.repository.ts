@@ -4,14 +4,23 @@ import { Prisma, Invitation, InvitationStatus } from '@prisma/client';
 
 export type InvitationWithOrg = Invitation & {
   organization: { id: string; name: string };
+  role: { name: string; };
 };
 
 @Injectable()
 export class InvitationsRepository {
   constructor(private readonly prisma: PrismaService) { }
 
-  async create(data: Prisma.InvitationUncheckedCreateInput): Promise<Invitation> {
-    return this.prisma.invitation.create({ data });
+  async create(data: { email: string, token: string, role: string, organizationId: string, expiresAt: Date }): Promise<Invitation> {
+    return this.prisma.invitation.create({
+      data: {
+        email: data.email,
+        token: data.token,
+        expiresAt: data.expiresAt,
+        organization: { connect: { id: data.organizationId } },
+        role: { connect: { organizationId_name: { organizationId: data.organizationId, name: data.role } } }
+      }
+    });
   }
 
   async findByToken(token: string): Promise<InvitationWithOrg | null> {
@@ -20,6 +29,9 @@ export class InvitationsRepository {
       include: {
         organization: {
           select: { id: true, name: true },
+        },
+        role: {
+          select: { name: true },
         },
       },
     });

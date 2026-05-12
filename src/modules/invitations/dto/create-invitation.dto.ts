@@ -1,6 +1,6 @@
 import { IsEmail, IsEnum, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Role } from '../../../common/enums/role.enum.js';
 
 export class CreateInvitationDto {
   @ApiProperty({
