@@ -30,7 +30,7 @@ import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
-
+import { Role } from '../../common/enums/role.enum.js';
 @ApiTags('Invitations')
 @ApiSecurity('x-organization-id')
 @Controller('invitations')
@@ -41,7 +41,7 @@ export class InvitationsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles('OWNER', 'ADMINISTRATOR')
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create invitation',

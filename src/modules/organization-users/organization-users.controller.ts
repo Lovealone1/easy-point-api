@@ -20,7 +20,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiTooManyRequestsResponse, ApiOk
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
-import { Role } from '@prisma/client';
+import { Role } from '../../common/enums/role.enum.js';
 import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 

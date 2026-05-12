@@ -8,7 +8,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { ConfigType } from '@nestjs/config';
-import { InvitationStatus, Role } from '@prisma/client';
+import { Role } from '../../common/enums/role.enum.js';
+import { InvitationStatus } from '@prisma/client';
 import crypto from 'crypto';
 
 import appConfig from '../../common/config/config.js';
@@ -125,7 +126,7 @@ export class InvitationsService {
 
     const baseResponse = {
       email: invitation.email,
-      role: invitation.role,
+      role: invitation.role.name as Role,
       organizationName: invitation.organization.name,
     };
 
@@ -212,7 +213,7 @@ export class InvitationsService {
         data: {
           userId,
           organizationId: invitation.organizationId,
-          role: invitation.role,
+          roleId: invitation.roleId,
         },
       }),
       this.prismaService.invitation.update({
@@ -263,7 +264,7 @@ export class InvitationsService {
       data: {
         userId,
         organizationId: invitation.organizationId,
-        role: invitation.role,
+        roleId: invitation.roleId,
       },
     });
 

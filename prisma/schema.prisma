@@ -6,12 +6,7 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  OWNER
-  ADMINISTRATOR
-  COLLABORATOR
-  USER
-}
+// enum Role replaced by model Role in feature/11
 
 enum GlobalRole {
   ADMIN
@@ -91,6 +86,8 @@ model Organization {
   productions           Production[]
   saleUtilities         SaleUtility[]
   saleItemUtilities     SaleItemUtility[]
+  roles                 Role[]
+  rolePermissions       RolePermission[]
 
   @@map("organizations")
 }
@@ -99,11 +96,12 @@ model OrganizationUser {
   id             String   @id @default(uuid())
   userId         String
   organizationId String
-  role           Role     @default(USER)
+  roleId         String
   joinedAt       DateTime @default(now())
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
 
   @@unique([userId, organizationId])
   @@index([userId])
@@ -122,12 +120,13 @@ model Invitation {
   id        String           @id @default(uuid())
   email     String
   token     String           @unique
-  role      Role
+  roleId    String
   status    InvitationStatus @default(PENDING)
   expiresAt DateTime
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role         @relation(fields: [roleId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -891,4 +890,70 @@ model ProductionSupplyUsage {
   @@index([supplyId])
   @@index([supplyStockEntryId])
   @@map("production_supply_usages")
+}
+
+model Role {
+  id               String   @id @default(uuid())
+  organizationId   String
+  name             String   // Ej: 'OWNER', 'ADMINISTRATOR', 'COLLABORATOR', 'USER', 'CAJERO'
+  description      String?
+  isSystemDefault  Boolean  @default(false)
+  
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  users            OrganizationUser[]
+  invitations      Invitation[]
+  permissions      RolePermission[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([organizationId, name]) 
+  @@map("roles")
+}
+
+model Module {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String?
+  
+  permissions Permission[]
+  
+  @@map("modules")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  moduleId    String
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  resource    String
+  action      String
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id             String @id @default(uuid())
+  
+  // Para permisos de Organización
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  roleId         String?
+  role           Role?       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  // Para permisos Globales del Sistema
+  globalRole     GlobalRole?
+  
+  permissionId   String
+  permission     Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@unique([globalRole, permissionId])
+  @@map("role_permissions")
 }

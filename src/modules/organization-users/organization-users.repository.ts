@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma, Role } from '@prisma/client';
+import { Role } from '../../common/enums/role.enum.js';
+import { Prisma } from '@prisma/client';
 import { OrganizationUserEntity } from './domain/organization-user.entity.js';
 
 /**
@@ -31,20 +32,26 @@ export class OrganizationUsersRepository {
   ): Promise<OrganizationUserEntity | null> {
     const raw = await this.prisma.organizationUser.findUnique({
       where: { userId_organizationId: { userId, organizationId } },
+      include: { role: true },
     });
     return raw ? OrganizationUserEntity.fromPrisma(raw) : null;
   }
 
   async countOwners(organizationId: string): Promise<number> {
     return this.prisma.organizationUser.count({
-      where: { organizationId, role: Role.OWNER },
+      where: { organizationId, role: { name: Role.OWNER } },
     });
   }
 
-  async create(
-    data: Prisma.OrganizationUserUncheckedCreateInput,
-  ): Promise<OrganizationUserEntity> {
-    const raw = await this.prisma.organizationUser.create({ data });
+  async create(data: { userId: string; organizationId: string; role: string }): Promise<OrganizationUserEntity> {
+    const raw = await this.prisma.organizationUser.create({
+      data: {
+        user: { connect: { id: data.userId } },
+        organization: { connect: { id: data.organizationId } },
+        role: { connect: { organizationId_name: { organizationId: data.organizationId, name: data.role } } }
+      },
+      include: { role: true }
+    });
     return OrganizationUserEntity.fromPrisma(raw);
   }
 
@@ -62,7 +69,7 @@ export class OrganizationUsersRepository {
       : undefined;
 
     const [rows, count] = await Promise.all([
-      this.prisma.organizationUser.findMany({ skip, take, where, orderBy, include }),
+      this.prisma.organizationUser.findMany({ skip, take, where, orderBy, include: { ...include, role: true } }),
       this.prisma.organizationUser.count({ where }),
     ]);
 
@@ -70,20 +77,21 @@ export class OrganizationUsersRepository {
   }
 
   async findById(id: string): Promise<OrganizationUserEntity | null> {
-    const raw = await this.prisma.organizationUser.findUnique({ where: { id } });
+    const raw = await this.prisma.organizationUser.findUnique({ where: { id }, include: { role: true } });
     return raw ? OrganizationUserEntity.fromPrisma(raw) : null;
   }
 
-  async updateRole(id: string, role: Role): Promise<OrganizationUserEntity> {
+  async updateRole(id: string, role: string, organizationId: string): Promise<OrganizationUserEntity> {
     const raw = await this.prisma.organizationUser.update({
       where: { id },
-      data: { role },
+      data: { role: { connect: { organizationId_name: { organizationId, name: role } } } },
+      include: { role: true }
     });
     return OrganizationUserEntity.fromPrisma(raw);
   }
 
   async delete(id: string): Promise<OrganizationUserEntity> {
-    const raw = await this.prisma.organizationUser.delete({ where: { id } });
+    const raw = await this.prisma.organizationUser.delete({ where: { id }, include: { role: true } });
     return OrganizationUserEntity.fromPrisma(raw);
   }
 }

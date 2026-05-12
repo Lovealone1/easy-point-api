@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { Role } from '../../../common/enums/role.enum.js';
 
 /**
  * Datos reducidos del User relacionado, cargados cuando se hace
@@ -103,7 +103,8 @@ export class OrganizationUserEntity {
     id: string;
     userId: string;
     organizationId: string;
-    role: Role;
+    roleId?: string;
+    role: { name: string };
     joinedAt: Date;
     user?: {
       id: string;
@@ -117,7 +118,7 @@ export class OrganizationUserEntity {
       id: raw.id,
       userId: raw.userId,
       organizationId: raw.organizationId,
-      role: raw.role,
+      role: raw.role.name as Role,
       joinedAt: raw.joinedAt,
       user: raw.user ?? undefined,
     });
