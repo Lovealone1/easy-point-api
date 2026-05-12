@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Role, OrganizationStatus, GlobalRole } from '@prisma/client';
+import { Role } from '../enums/role.enum.js';
+import { OrganizationStatus, GlobalRole } from '@prisma/client';
 import { ORG_ROLES_KEY } from '../decorators/org-roles.decorator.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { getTenantId } from '../context/tenant.context.js';
@@ -65,18 +66,19 @@ export class OrgRolesGuard implements CanActivate {
           organizationId: organizationId,
         },
       },
+      include: { role: true },
     });
 
     if (!orgUser) {
       throw new ForbiddenException('You do not belong to this organization');
     }
 
-    if (requiredRoles.length > 0 && !requiredRoles.includes(orgUser.role)) {
+    if (requiredRoles.length > 0 && !requiredRoles.includes(orgUser.role.name as Role)) {
       throw new ForbiddenException('You do not have the required role in this organization to perform this action');
     }
 
     request.organization = organization;
-    request.orgRole = orgUser.role;
+    request.orgRole = orgUser.role.name as Role;
 
     return true;
   }

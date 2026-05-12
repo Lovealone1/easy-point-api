@@ -6,7 +6,8 @@ import {
 import { OrganizationUsersRepository } from './organization-users.repository.js';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto.js';
 import { UpdateOrganizationUserDto } from './dto/update-organization-user.dto.js';
-import { Role, Prisma } from '@prisma/client';
+import { Role } from '../../common/enums/role.enum.js';
+import { Prisma } from '@prisma/client';
 import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
@@ -64,7 +65,7 @@ export class OrganizationUsersService {
     return this.organizationUsersRepository.create({
       userId,
       organizationId,
-      role: assignedRole,
+      role: assignedRole, // this will be passed to repo.create which accepts { role: string }
     });
   }
 
@@ -148,7 +149,7 @@ export class OrganizationUsersService {
     // La entidad aplica el cambio de rol antes de persistir
     member.applyRoleChange(newRole);
 
-    return this.organizationUsersRepository.updateRole(id, member.role);
+    return this.organizationUsersRepository.updateRole(id, newRole, member.organizationId);
   }
 
   async remove(id: string): Promise<OrganizationUserEntity> {

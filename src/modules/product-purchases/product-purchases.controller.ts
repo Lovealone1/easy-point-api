@@ -35,7 +35,8 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
-import { Role, GlobalRole } from '@prisma/client';
+import { Role } from '../../common/enums/role.enum.js';
+import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
 @ApiTags('Product Purchases')
