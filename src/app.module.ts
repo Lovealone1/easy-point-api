@@ -34,6 +34,7 @@ import { RedisModule } from './infraestructure/redis/redis.module.js';
 import appConfig from './common/config/config.js';
 import { MailService } from './infraestructure/mail/mail.service.js';
 import { CronModule } from './common/cron/cron.module.js';
+import { RolesModule } from './modules/roles/roles.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { CronModule } from './common/cron/cron.module.js';
     SupplyStockEntriesModule,
     ProductionsModule,
     CronModule,
+    RolesModule,
   ],
   controllers: [],
   providers: [MailService],
