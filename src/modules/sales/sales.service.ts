@@ -10,6 +10,7 @@ import { SalesRepository } from './sales.repository.js';
 import { InventoryMovementsRepository } from '../inventory-movements/inventory-movements.repository.js';
 import { ProductStocksRepository } from '../product-stocks/product-stocks.repository.js';
 import { FinancialTransactionsService } from '../financial-transactions/financial-transactions.service.js';
+import { UtilitiesService } from '../utilities/utilities.service.js';
 import { CreateSaleDto, CreateSaleItemDto } from './dto/create-sale.dto.js';
 import { CompleteSaleDto } from './dto/complete-sale.dto.js';
 import { AddItemsSaleDto } from './dto/add-items-sale.dto.js';
@@ -28,6 +29,7 @@ export class SalesService {
     private readonly inventoryMovementsRepository: InventoryMovementsRepository,
     private readonly productStocksRepository: ProductStocksRepository,
     private readonly financialTransactionsService: FinancialTransactionsService,
+    private readonly utilitiesService: UtilitiesService,
   ) {}
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -135,7 +137,21 @@ export class SalesService {
           tx,
         );
 
-        return this.salesRepository.update(sale.id, { transactionId: transaction.id }, tx);
+        const updatedSale = await this.salesRepository.update(sale.id, { transactionId: transaction.id }, tx);
+
+        // 7 — Persist utility records atomically
+        await this.utilitiesService.computeAndPersist(
+          sale.id,
+          organizationId,
+          dto.items.map((item) => ({
+            productId: item.productId,
+            quantity: new Prisma.Decimal(item.quantity),
+            unitCost: new Prisma.Decimal(item.unitPrice), // unitCost on movement = sale price
+          })),
+          tx,
+        );
+
+        return updatedSale;
       }
 
       return sale;
@@ -177,7 +193,7 @@ export class SalesService {
         tx,
       );
 
-      return this.salesRepository.update(
+      const updatedSale = await this.salesRepository.update(
         sale.id,
         {
           status: SaleStatus.COMPLETED,
@@ -186,6 +202,20 @@ export class SalesService {
         },
         tx,
       );
+
+      // Persist utility records for this sale atomically
+      const movements = await tx.inventoryMovement.findMany({
+        where: { saleId: sale.id, type: MovementType.SALE },
+        select: { productId: true, quantity: true, unitCost: true },
+      });
+      await this.utilitiesService.computeAndPersist(
+        sale.id,
+        organizationId,
+        movements,
+        tx,
+      );
+
+      return updatedSale;
     });
   }
 
@@ -314,6 +344,9 @@ export class SalesService {
           },
           tx,
         );
+
+        // Remove persisted utility records (cascade via SaleUtility → SaleItemUtility)
+        await this.utilitiesService.deleteForSale(sale.id, tx);
 
         await this.salesRepository.update(sale.id, { status: SaleStatus.CANCELLED }, tx);
       }

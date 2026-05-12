@@ -21,6 +21,7 @@ import { FinancialTransactionsModule } from './modules/financial-transactions/fi
 import { SupplyPurchasesModule } from './modules/supply-purchases/supply-purchases.module.js';
 import { ProductPurchasesModule } from './modules/product-purchases/product-purchases.module.js';
 import { SalesModule } from './modules/sales/sales.module.js';
+import { UtilitiesModule } from './modules/utilities/utilities.module.js';
 import { SupplyStockEntriesModule } from './modules/supply-stock-entries/supply-stock-entries.module.js';
 import { ProductionsModule } from './modules/productions/productions.module.js';
 import { ConfigModule } from '@nestjs/config';
@@ -63,6 +64,7 @@ import { CronModule } from './common/cron/cron.module.js';
     FinancialTransactionsModule,
     SupplyPurchasesModule,
     ProductPurchasesModule,
+    UtilitiesModule,
     SalesModule,
     SupplyStockEntriesModule,
     ProductionsModule,
