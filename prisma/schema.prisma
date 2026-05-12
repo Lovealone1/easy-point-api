@@ -89,6 +89,8 @@ model Organization {
   sales                 Sale[]
   transactionCategories TransactionCategory[]
   productions           Production[]
+  saleUtilities         SaleUtility[]
+  saleItemUtilities     SaleItemUtility[]
 
   @@map("organizations")
 }
@@ -315,6 +317,7 @@ model Product {
   stockEntries       ProductStock[]
   inventoryMovements InventoryMovement[]
   productions        Production[]
+  saleItemUtilities  SaleItemUtility[]
 
   @@index([organizationId])
   @@index([categoryId])
@@ -688,10 +691,70 @@ model Sale {
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   movements    InventoryMovement[]
+  saleUtility  SaleUtility?
 
   @@index([organizationId])
   @@index([clientId])
   @@map("sales")
+}
+
+enum CostSource {
+  PRODUCTION
+  ESTIMATED
+  UNKNOWN
+}
+
+model SaleUtility {
+  id             String @id @default(uuid())
+  organizationId String
+
+  saleId String @unique
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  totalRevenue  Decimal @db.Decimal(19, 4)
+  totalCost     Decimal @db.Decimal(19, 4)
+  grossProfit   Decimal @db.Decimal(19, 4)
+  marginPercent Decimal @db.Decimal(8, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items        SaleItemUtility[]
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("sale_utilities")
+}
+
+model SaleItemUtility {
+  id             String @id @default(uuid())
+  organizationId String
+
+  saleUtilityId String
+  saleUtility   SaleUtility @relation(fields: [saleUtilityId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  quantity      Decimal    @db.Decimal(12, 4)
+  unitRevenue   Decimal    @db.Decimal(12, 4)
+  unitCost      Decimal    @db.Decimal(12, 4)
+  totalRevenue  Decimal    @db.Decimal(19, 4)
+  totalCost     Decimal    @db.Decimal(19, 4)
+  grossProfit   Decimal    @db.Decimal(19, 4)
+  marginPercent Decimal    @db.Decimal(8, 4)
+  costSource    CostSource
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([saleUtilityId])
+  @@index([productId])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("sale_item_utilities")
 }
 
 enum PaymentMethod {
