@@ -37,4 +37,17 @@ export class AppLogger implements LoggerService {
   danger(message: any) {
     console.log(chalk.red(this.format('DANGER', message)));
   }
+
+  /**
+   * Emits a structured JSON audit line to stdout.
+   * This is intentionally not chalk-coloured so that log shippers
+   * (Datadog agent, Promtail, Filebeat) can parse it cleanly.
+   *
+   * Log pipelines can filter by: `json.type == "audit"`
+   */
+  auditLog(payload: Record<string, unknown>): void {
+    process.stdout.write(
+      JSON.stringify({ type: 'audit', ...payload }) + '\n',
+    );
+  }
 }
