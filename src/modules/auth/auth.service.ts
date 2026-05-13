@@ -12,6 +12,9 @@ import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto.js';
 import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.template.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
+import { AuditService } from '../../infraestructure/audit/audit.service.js';
+import { AuditAction } from '../../infraestructure/audit/enums/audit-action.enum.js';
+import { AuditSeverity } from '../../infraestructure/audit/enums/audit-severity.enum.js';
 import crypto from 'crypto';
 
 export interface SessionMetadata {
@@ -39,6 +42,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly prismaService: PrismaService,
     private readonly invitationsService: InvitationsService,
+    private readonly auditService: AuditService,
   ) { }
 
   async generateOtp(payload: GenerateOtpDto, isDevReturn: boolean = false) {
@@ -116,6 +120,15 @@ export class AuthService {
     const attempts = await this.redisCacheService.get<number>(attemptsKey) || 0;
     if (attempts >= 3) {
       this.logger.warn(`OTP verification blocked for ${email} due to max attempts reached`);
+
+      // Audit: login failed due to max attempts
+      this.auditService.log({
+        action: AuditAction.LOGIN_FAILED,
+        resourceType: 'Session',
+        metadata: { email, reason: 'MAX_OTP_ATTEMPTS', intent },
+        severity: AuditSeverity.CRITICAL,
+      });
+
       throw new ForbiddenException('Maximum verification attempts exceeded. Please request a new code.');
     }
 
@@ -125,6 +138,15 @@ export class AuthService {
     if (!cachedOtp || cachedOtp !== otp) {
       await this.redisCacheService.incr(attemptsKey, 900); // 15 min lock for attempts
       this.logger.warn(`Invalid or expired OTP attempt for ${email} (${intent}). Attempt: ${attempts + 1}`);
+
+      // Audit: login failed due to invalid OTP
+      this.auditService.log({
+        action: AuditAction.LOGIN_FAILED,
+        resourceType: 'Session',
+        metadata: { email, reason: 'INVALID_OTP', intent, attempt: attempts + 1 },
+        severity: AuditSeverity.CRITICAL,
+      });
+
       throw new UnauthorizedException('Invalid or expired OTP code');
     }
 
@@ -189,6 +211,20 @@ export class AuthService {
     // We need to replace that with the stateful token generation.
     const user = await this.prismaService.user.findUnique({ where: { email: payload.email } });
     const { accessToken } = await this.generateAuthTokens(user!.id, user!.email, user!.globalRole!, metadata);
+
+    // Audit: successful login
+    this.auditService.log({
+      action: AuditAction.LOGIN,
+      resourceType: 'Session',
+      userId: user!.id,
+      metadata: {
+        email: user!.email,
+        intent: payload.intent,
+        ip: metadata.ip,
+        userAgent: metadata.userAgent,
+      },
+      severity: AuditSeverity.LOW,
+    });
 
     return {
       ...result,
@@ -347,6 +383,17 @@ export class AuthService {
       this.redisCacheService.srem(`user_sessions:${userId}`, sessionId),
     ]);
     this.logger.log(`Session ${sessionId} logged out for user ${userId}`);
+
+    // Audit: logout
+    this.auditService.log({
+      action: AuditAction.LOGOUT,
+      resourceType: 'Session',
+      resourceId: sessionId,
+      userId,
+      sessionId,
+      severity: AuditSeverity.LOW,
+    });
+
     return { message: 'Logged out successfully' };
   }
 
@@ -360,6 +407,16 @@ export class AuthService {
     }
 
     this.logger.log(`User ${userId} logged out from all devices`);
+
+    // Audit: logout all
+    this.auditService.log({
+      action: AuditAction.LOGOUT,
+      resourceType: 'Session',
+      userId,
+      metadata: { scope: 'ALL_DEVICES', sessionCount: sessionIds?.length ?? 0 },
+      severity: AuditSeverity.MEDIUM,
+    });
+
     return { message: 'Logged out from all devices successfully' };
   }
 
@@ -376,6 +433,17 @@ export class AuthService {
       this.redisCacheService.srem(`user_sessions:${userId}`, sessionIdToKill),
     ]);
     this.logger.log(`Session ${sessionIdToKill} killed by user ${userId}`);
+
+    // Audit: session kill
+    this.auditService.log({
+      action: AuditAction.SESSION_KILL,
+      resourceType: 'Session',
+      resourceId: sessionIdToKill,
+      userId,
+      metadata: { killedSessionId: sessionIdToKill },
+      severity: AuditSeverity.CRITICAL,
+    });
+
     return { message: 'Session terminated successfully' };
   }
 

@@ -1,9 +1,12 @@
 import { Injectable, type NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
+import * as crypto from 'crypto';
+import { getTenantContext } from '../context/tenant.context.js';
 
 export interface RequestWithMetadata extends Request {
   clientIp: string;
   userAgent: string;
+  requestId: string;
 }
 
 declare global {
@@ -11,6 +14,7 @@ declare global {
     interface Request {
       clientIp: string;
       userAgent: string;
+      requestId: string;
     }
   }
 }
@@ -24,6 +28,18 @@ export class RequestInfoMiddleware implements NestMiddleware {
   ): void {
     request.clientIp = this.extractClientIp(request);
     request.userAgent = this.extractUserAgent(request);
+    // Generate or propagate a unique Request ID for distributed tracing
+    request.requestId =
+      (request.headers['x-request-id'] as string) || crypto.randomUUID();
+
+    // Patch the AsyncLocalStorage store so audit context is available globally
+    // without passing the HTTP request object through service layers.
+    const store = getTenantContext();
+    if (store) {
+      store.ipAddress = request.clientIp;
+      store.userAgent = request.userAgent;
+      store.requestId = request.requestId;
+    }
 
     next();
   }
