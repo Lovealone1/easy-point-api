@@ -47,6 +47,7 @@ model User {
   productPurchases      ProductPurchase[]
   sales                 Sale[]
   productions           Production[]
+  refreshTokens         RefreshToken[]
 
   @@map("users")
 }
@@ -1026,5 +1027,19 @@ model AuditLog {
   @@index([tenantId, createdAt])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
