@@ -62,6 +62,18 @@ export class AuditRepository {
     return rows.map(AuditLogEntity.fromPrisma);
   }
 
+  /**
+   * Bulk-deletes all audit logs created before `cutoff`.
+   * Called by the daily purge job — NOT exposed via the API.
+   *
+   * @returns `{ count }` — number of rows deleted.
+   */
+  async deleteOlderThan(cutoff: Date): Promise<{ count: number }> {
+    return this.prisma.auditLog.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+  }
+
   private buildWhereClause(
     tenantId: string,
     dto: QueryAuditLogDto,

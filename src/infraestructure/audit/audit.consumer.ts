@@ -5,6 +5,15 @@ import { AuditRepository } from './audit.repository.js';
 import type { AuditLogEvent } from './interfaces/audit-log-event.interface.js';
 import { AuditAction as PrismaAuditAction, AuditSeverity as PrismaAuditSeverity, Prisma } from '@prisma/client';
 
+const DEFAULT_RETENTION_DAYS = 30;
+
+/**
+ * AuditConsumer — listens to `audit.log` events and fans out to:
+ *  1. PostgreSQL persistence via AuditRepository
+ *  2. Structured JSON stdout for log aggregation (Loki, Datadog, OpenSearch, etc.)
+ *
+ * Also handles the daily purge job triggered by the `cron.daily_midnight` event.
+ */
 @Injectable()
 export class AuditConsumer {
   private readonly logger = new Logger(AuditConsumer.name);
@@ -57,5 +66,39 @@ export class AuditConsumer {
     };
 
     process.stdout.write(JSON.stringify(structuredLog) + '\n');
+  }
+
+
+  @OnEvent('cron.daily_midnight', { async: true })
+  async handleDailyPurge(): Promise<void> {
+    const retentionDays = this.resolveRetentionDays();
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - retentionDays);
+
+    this.logger.log(
+      `[AuditPurge] Running — deleting logs older than ${retentionDays} days (before ${cutoff.toISOString()})`,
+    );
+
+    try {
+      const { count } = await this.auditRepository.deleteOlderThan(cutoff);
+      this.logger.log(`[AuditPurge] Deleted ${count} audit log(s).`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(`[AuditPurge] Failed: ${error.message}`, error.stack);
+    }
+  }
+
+  private resolveRetentionDays(): number {
+    const raw = process.env['AUDIT_LOG_RETENTION_DAYS'];
+    const parsed = raw ? parseInt(raw, 10) : NaN;
+
+    if (isNaN(parsed) || parsed < 1) {
+      this.logger.warn(
+        `[AuditPurge] Invalid AUDIT_LOG_RETENTION_DAYS="${raw}", falling back to ${DEFAULT_RETENTION_DAYS} days.`,
+      );
+      return DEFAULT_RETENTION_DAYS;
+    }
+
+    return parsed;
   }
 }
