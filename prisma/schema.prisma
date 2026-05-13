@@ -957,3 +957,74 @@ model RolePermission {
   @@unique([globalRole, permissionId])
   @@map("role_permissions")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT LOG — Append-only compliance & traceability store
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_CHANGE
+  ROLE_CHANGE
+  PERMISSION_CHANGE
+  EXPORT
+  CANCEL
+  API_KEY_CHANGE
+  TENANT_CONFIG_CHANGE
+  SESSION_KILL
+  CUSTOM
+}
+
+enum AuditSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// Append-only audit trail. Never update or delete rows from application code.
+model AuditLog {
+  id             String        @id @default(uuid())
+  /// Tenant that performed the action (organizationId)
+  tenantId       String
+  /// User who performed the action (nullable for system/anonymous events)
+  userId         String?
+  /// Populated when an admin impersonates another user (future feature)
+  impersonatedBy String?
+  action         AuditAction
+  /// Entity type affected, e.g. "Client", "Sale", "Role"
+  resourceType   String
+  /// Primary key of the affected entity
+  resourceId     String?
+  /// Full snapshot of the entity BEFORE the operation (for UPDATE/DELETE)
+  before         Json?
+  /// Full snapshot of the entity AFTER the operation (for CREATE/UPDATE)
+  after          Json?
+  /// Granular diff: { fieldName: { before: any, after: any } }
+  changedFields  Json?
+  /// Free-form structured context (correlation IDs, business reason, etc.)
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  requestId      String?
+  sessionId      String?
+  severity       AuditSeverity @default(LOW)
+  createdAt      DateTime      @default(now())
+
+  // Composite indices optimised for the most common query patterns
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([tenantId, resourceType, resourceId])
+  @@index([tenantId, action])
+  @@index([tenantId, severity])
+  @@index([tenantId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+

@@ -1,4 +1,5 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
@@ -34,7 +35,8 @@ import { RedisModule } from './infraestructure/redis/redis.module.js';
 import appConfig from './common/config/config.js';
 import { MailService } from './infraestructure/mail/mail.service.js';
 import { CronModule } from './common/cron/cron.module.js';
-import { RolesModule } from './modules/roles/roles.module';
+import { RolesModule } from './modules/roles/roles.module.js';
+import { AuditModule } from './infraestructure/audit/audit.module.js';
 
 @Module({
   imports: [
@@ -43,8 +45,21 @@ import { RolesModule } from './modules/roles/roles.module';
       envFilePath: '.env',
       load: [appConfig],
     }),
+    // Event bus — must be registered at root level
+    EventEmitterModule.forRoot({
+      wildcard: false,
+      delimiter: '.',
+      newListener: false,
+      removeListener: false,
+      maxListeners: 10,
+      verboseMemoryLeak: true,
+      ignoreErrors: false,
+    }),
     RedisModule,
     PrismaModule,
+    // ── Audit (Global — AuditService injectable everywhere) ────────────────
+    AuditModule,
+    // ── Feature modules ───────────────────────────────────────────────────
     AuthModule,
     OrganizationsModule,
     OrganizationUsersModule,

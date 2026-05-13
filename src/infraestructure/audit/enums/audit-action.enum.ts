@@ -1,0 +1,22 @@
+/**
+ * TypeScript mirror of the Prisma `AuditAction` enum.
+ * Keep in sync with prisma/schema.prisma.
+ */
+export enum AuditAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE',
+  RESTORE = 'RESTORE',
+  LOGIN = 'LOGIN',
+  LOGOUT = 'LOGOUT',
+  LOGIN_FAILED = 'LOGIN_FAILED',
+  PASSWORD_CHANGE = 'PASSWORD_CHANGE',
+  ROLE_CHANGE = 'ROLE_CHANGE',
+  PERMISSION_CHANGE = 'PERMISSION_CHANGE',
+  EXPORT = 'EXPORT',
+  CANCEL = 'CANCEL',
+  API_KEY_CHANGE = 'API_KEY_CHANGE',
+  TENANT_CONFIG_CHANGE = 'TENANT_CONFIG_CHANGE',
+  SESSION_KILL = 'SESSION_KILL',
+  CUSTOM = 'CUSTOM',
+}
