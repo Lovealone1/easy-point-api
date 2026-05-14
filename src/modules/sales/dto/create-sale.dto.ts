@@ -63,6 +63,14 @@ export class CreateSaleDto {
   clientId?: string;
 
   @ApiPropertyOptional({
+    description: 'Código del descuento a aplicar a esta venta (ej: PROM25).',
+    example: 'PROM25',
+  })
+  @IsOptional()
+  @IsString()
+  discountCode?: string;
+
+  @ApiPropertyOptional({
     enum: SaleStatus,
     default: SaleStatus.COMPLETED,
     example: SaleStatus.COMPLETED,

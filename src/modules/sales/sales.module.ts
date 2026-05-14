@@ -7,6 +7,7 @@ import { ProductStocksModule } from '../product-stocks/product-stocks.module.js'
 import { FinancialTransactionsModule } from '../financial-transactions/financial-transactions.module.js';
 import { UtilitiesModule } from '../utilities/utilities.module.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
+import { DiscountRulesModule } from '../discount-rules/discount-rules.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { PrismaModule } from '../../prisma/prisma.module.js';
     InventoryMovementsModule,    // exports InventoryMovementsRepository
     FinancialTransactionsModule, // exports FinancialTransactionsService
     UtilitiesModule,             // exports UtilitiesService for atomic utility persistence
+    DiscountRulesModule,         // exports DiscountRulesService
   ],
   controllers: [SalesController],
   providers: [SalesService, SalesRepository],

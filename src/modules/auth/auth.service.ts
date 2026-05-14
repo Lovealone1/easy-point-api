@@ -45,8 +45,8 @@ export class AuthService {
     private readonly auditService: AuditService,
   ) { }
 
-  async generateOtp(payload: GenerateOtpDto, isDevReturn: boolean = false) {
-    if (isDevReturn && this.config.app.env !== 'development') {
+  async generateOtp(payload: GenerateOtpDto, isDevMode: boolean = false) {
+    if (isDevMode && this.config.app.env !== 'development') {
       throw new ForbiddenException('Development endpoint is not allowed in this environment');
     }
 
@@ -87,7 +87,7 @@ export class AuthService {
 
     this.logger.log(`Generating new OTP for ${email} (${intent})`);
 
-    if (!isDevReturn) {
+    if (!isDevMode) {
       await this.sendOtpMail(email, intent, newOtp);
       return { message: 'OTP code sent via email' };
     }
