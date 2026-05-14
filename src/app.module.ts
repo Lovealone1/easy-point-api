@@ -38,6 +38,7 @@ import { CronModule } from './common/cron/cron.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { AuditModule } from './infraestructure/audit/audit.module.js';
 import { DiscountRulesModule } from './modules/discount-rules/discount-rules.module.js';
+import { StorageModule } from './infraestructure/storage/storage.module.js';
 
 @Module({
   imports: [
@@ -60,6 +61,8 @@ import { DiscountRulesModule } from './modules/discount-rules/discount-rules.mod
     PrismaModule,
     // ── Audit (Global — AuditService injectable everywhere) ────────────────
     AuditModule,
+    // ── Storage (Global — StorageService injectable everywhere) ────────────
+    StorageModule,
     // ── Feature modules ───────────────────────────────────────────────────
     AuthModule,
     OrganizationsModule,
