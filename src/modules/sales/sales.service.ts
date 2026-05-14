@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ConflictException,
   UnprocessableEntityException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { SalesRepository } from './sales.repository.js';
@@ -11,6 +12,8 @@ import { InventoryMovementsRepository } from '../inventory-movements/inventory-m
 import { ProductStocksRepository } from '../product-stocks/product-stocks.repository.js';
 import { FinancialTransactionsService } from '../financial-transactions/financial-transactions.service.js';
 import { UtilitiesService } from '../utilities/utilities.service.js';
+import { DiscountRulesService } from '../discount-rules/discount-rules.service.js';
+import { DiscountRuleEntity } from '../discount-rules/domain/discount-rule.entity.js';
 import { CreateSaleDto, CreateSaleItemDto } from './dto/create-sale.dto.js';
 import { CompleteSaleDto } from './dto/complete-sale.dto.js';
 import { AddItemsSaleDto } from './dto/add-items-sale.dto.js';
@@ -23,6 +26,8 @@ import { Prisma, SaleStatus, MovementType, TransactionType, OperationType } from
 
 @Injectable()
 export class SalesService {
+  private readonly logger = new Logger(SalesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly salesRepository: SalesRepository,
@@ -30,6 +35,7 @@ export class SalesService {
     private readonly productStocksRepository: ProductStocksRepository,
     private readonly financialTransactionsService: FinancialTransactionsService,
     private readonly utilitiesService: UtilitiesService,
+    private readonly discountRulesService: DiscountRulesService,
   ) {}
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -66,20 +72,62 @@ export class SalesService {
       }
     }
 
-    const totalAmount = this.calcTotal(dto.items);
+    // 1 — Validate Client if provided
+    if (dto.clientId) {
+      const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
+      if (!client || client.organizationId !== organizationId) {
+        throw new NotFoundException(`Client with ID ${dto.clientId} not found`);
+      }
+    }
+
+    // 2 — Calculate subtotal
+    const subtotalAmount = this.calcTotal(dto.items);
+    let discountAmount = new Prisma.Decimal(0);
+    let totalAmount = subtotalAmount;
+    let appliedRule: DiscountRuleEntity | null = null;
+
+    // 3 — Validate and apply discount if provided
+    if (dto.discountCode) {
+      try {
+        appliedRule = await this.discountRulesService.findByCode(dto.discountCode);
+        
+        // Ensure rule applies to this client if scope is CLIENT
+        if (appliedRule.scope === 'CLIENT' && appliedRule.clientId !== dto.clientId) {
+          throw new BadRequestException(`Discount code ${dto.discountCode} is not valid for this client`);
+        }
+
+        if (!appliedRule.canApply(subtotalAmount)) {
+          throw new BadRequestException(
+            `Discount code ${dto.discountCode} cannot be applied. Check minimum sale amount, expiration, or usage limits.`
+          );
+        }
+
+        discountAmount = appliedRule.computeDiscountAmount(subtotalAmount);
+        totalAmount = subtotalAmount.minus(discountAmount);
+      } catch (error) {
+        if (error instanceof NotFoundException) {
+          this.logger.warn(`Discount code "${dto.discountCode}" not found. Proceeding with sale without discount.`);
+          appliedRule = null;
+        } else {
+          throw error;
+        }
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1 — Validate products and resolve stock records
+      // 4 — Validate products and resolve stock records
       const stockMap = await this.resolveStocks(organizationId, dto.items, tx);
 
-      // 2 — Guard: check no stock goes negative
+      // 5 — Guard: check no stock goes negative
       await this.validateSufficientStock(dto.items, stockMap, tx);
 
-      // 3 — Insert sale header
+      // 6 — Insert sale header
       const sale = await this.salesRepository.create(
         {
           organizationId,
           clientId: dto.clientId ?? null,
+          subtotalAmount,
+          discountAmount: discountAmount.isZero() ? null : discountAmount,
           totalAmount,
           status,
           notes: dto.notes ?? null,
@@ -88,7 +136,30 @@ export class SalesService {
         tx,
       );
 
-      // 4 — Bulk insert inventory movements (type = SALE)
+      // 7 — Apply Discount Records if applicable
+      if (appliedRule && !discountAmount.isZero()) {
+        await tx.appliedDiscount.create({
+          data: {
+            organizationId,
+            saleId: sale.id,
+            discountRuleId: appliedRule.id,
+            discountType: appliedRule.type,
+            discountValue: appliedRule.value,
+            discountAmount,
+            originalAmount: subtotalAmount,
+            finalAmount: totalAmount,
+            appliedByUserId: userId,
+          },
+        });
+
+        // Increment usage count atomically
+        await tx.discountRule.update({
+          where: { id: appliedRule.id },
+          data: { usageCount: { increment: 1 } },
+        });
+      }
+
+      // 8 — Bulk insert inventory movements (type = SALE)
       await this.inventoryMovementsRepository.createMany(
         dto.items.map((item) => {
           const location = item.location || 'Principal';

@@ -37,6 +37,7 @@ import { MailService } from './infraestructure/mail/mail.service.js';
 import { CronModule } from './common/cron/cron.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { AuditModule } from './infraestructure/audit/audit.module.js';
+import { DiscountRulesModule } from './modules/discount-rules/discount-rules.module.js';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { AuditModule } from './infraestructure/audit/audit.module.js';
     ProductionsModule,
     CronModule,
     RolesModule,
+    DiscountRulesModule,
   ],
   controllers: [],
   providers: [MailService],

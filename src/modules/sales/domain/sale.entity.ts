@@ -4,6 +4,8 @@ export class SaleEntity {
   readonly id: string;
   readonly organizationId: string;
   readonly clientId: string | null;
+  readonly subtotalAmount: Prisma.Decimal | null;
+  readonly discountAmount: Prisma.Decimal | null;
   readonly totalAmount: Prisma.Decimal;
   readonly transactionId: string | null;
   readonly status: SaleStatus;
@@ -16,6 +18,8 @@ export class SaleEntity {
     id: string;
     organizationId: string;
     clientId: string | null;
+    subtotalAmount: Prisma.Decimal | null;
+    discountAmount: Prisma.Decimal | null;
     totalAmount: Prisma.Decimal;
     transactionId: string | null;
     status: SaleStatus;
@@ -27,6 +31,8 @@ export class SaleEntity {
     this.id = params.id;
     this.organizationId = params.organizationId;
     this.clientId = params.clientId;
+    this.subtotalAmount = params.subtotalAmount;
+    this.discountAmount = params.discountAmount;
     this.totalAmount = params.totalAmount;
     this.transactionId = params.transactionId;
     this.status = params.status;
@@ -40,6 +46,8 @@ export class SaleEntity {
     id: string;
     organizationId: string;
     clientId: string | null;
+    subtotalAmount: Prisma.Decimal | null;
+    discountAmount: Prisma.Decimal | null;
     totalAmount: Prisma.Decimal;
     transactionId: string | null;
     status: SaleStatus;
@@ -51,3 +59,4 @@ export class SaleEntity {
     return new SaleEntity(raw);
   }
 }
+
