@@ -17,20 +17,13 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { InvitationsRepository } from './invitations.repository.js';
 import { OrganizationUsersRepository } from '../organization-users/organization-users.repository.js';
 import { CreateInvitationDto } from './dto/create-invitation.dto.js';
+import { MailService } from '../../infraestructure/mail/mail.service.js';
+import { getInvitationEmailTemplate } from '../../infraestructure/mail/templates/invitation.template.js';
 
-/** TTL for stored invitation record: 72 hours */
-const INVITATION_TTL_HOURS = 72;
+/** TTL for stored invitation record: 48 hours */
+const INVITATION_TTL_HOURS = 48;
 
-/** TTL for the temporary JWT emitted on verify (new users only): 20 minutes */
-const TEMP_TOKEN_EXPIRES_IN = '20m';
 
-/** Payload embedded in the short-lived invite JWT */
-export interface InviteTokenPayload {
-  sub: null;
-  email: string;
-  canRegister: true;
-  invitationToken: string;
-}
 
 @Injectable()
 export class InvitationsService {
@@ -43,6 +36,7 @@ export class InvitationsService {
     private readonly orgUsersRepository: OrganizationUsersRepository,
     private readonly prismaService: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -83,10 +77,30 @@ export class InvitationsService {
       expiresAt,
     });
 
-    // ── DEV EVENT: log token to console instead of sending email ──
-    this.logger.log(
-      `[INVITATION CREATED] id=${invitation.id} | email=${email} | role=${role} | token=${token} | expiresAt=${expiresAt.toISOString()}`,
-    );
+
+
+    const organization = await this.prismaService.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    const roleData = await this.prismaService.role.findUnique({
+      where: { id: role },
+    });
+
+    if (organization && roleData) {
+      const invitationLink = `${this.config.app.frontendUrl}/invitations/accept?token=${token}`;
+      const htmlContent = getInvitationEmailTemplate(
+        organization.name,
+        roleData.name,
+        invitationLink,
+      );
+
+      await this.mailService.sendMail(
+        email,
+        `You have been invited to join ${organization.name} on Easy Point`,
+        htmlContent,
+      );
+    }
 
     return {
       message: 'Invitation created successfully',
@@ -130,34 +144,7 @@ export class InvitationsService {
       organizationName: invitation.organization.name,
     };
 
-    // Check whether this email already has a user account
-    const existingUser = await this.prismaService.user.findUnique({
-      where: { email: invitation.email },
-    });
-
-    if (existingUser) {
-      // Existing user → no temp token; they should POST /invitations/accept
-      return baseResponse;
-    }
-
-    // New user → issue a short-lived bypass JWT
-    const payload: InviteTokenPayload = {
-      sub: null,
-      email: invitation.email,
-      canRegister: true,
-      invitationToken: token,
-    };
-
-    const tempInviteToken = await this.jwtService.signAsync(payload, {
-      secret: this.config.jwt.secret,
-      expiresIn: TEMP_TOKEN_EXPIRES_IN,
-    });
-
-    this.logger.log(
-      `[INVITE VERIFY] New user detected for ${invitation.email} — tempInviteToken issued`,
-    );
-
-    return { ...baseResponse, tempInviteToken };
+    return baseResponse;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -272,5 +259,45 @@ export class InvitationsService {
       where: { id: invitation.id },
       data: { status: InvitationStatus.ACCEPTED },
     });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DEV ONLY: Get pending invitations
+  // ────────────────────────────────────────────────────────────────────────────
+  async getDevInvitations() {
+    if (this.config.app.env === 'production') {
+      import('@nestjs/common').then(m => {
+        throw new m.ForbiddenException('Development endpoints are disabled in production');
+      });
+    }
+
+    const invitations = await this.prismaService.invitation.findMany({
+      where: { status: InvitationStatus.PENDING },
+      select: {
+        id: true,
+        email: true,
+        token: true,
+        expiresAt: true,
+        organization: { select: { name: true } },
+        role: { select: { name: true } }
+      },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    this.logger.log(`[DEV ONLY] Showing ${invitations.length} pending invitations in console:`);
+    console.table(
+      invitations.map(inv => ({
+        email: inv.email,
+        token: inv.token,
+        organization: inv.organization.name,
+        role: inv.role.name,
+      }))
+    );
+
+    return {
+      message: 'Dev only: Pending invitations',
+      count: invitations.length,
+      invitations,
+    };
   }
 }

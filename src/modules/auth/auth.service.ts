@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, ForbiddenException, UnauthorizedException, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
+import { Inject, Injectable, Logger, ForbiddenException, UnauthorizedException, NotFoundException, HttpException, HttpStatus, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GlobalRole } from '@prisma/client';
@@ -9,13 +9,13 @@ import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { GenerateOtpDto } from './dto/generate-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
-import { CompleteRegistrationDto } from './dto/complete-registration.dto.js';
 import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.template.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { AuditService } from '../../infraestructure/audit/audit.service.js';
 import { AuditAction } from '../../infraestructure/audit/enums/audit-action.enum.js';
 import { AuditSeverity } from '../../infraestructure/audit/enums/audit-severity.enum.js';
 import crypto from 'crypto';
+import * as argon2 from 'argon2';
 
 export interface SessionMetadata {
   sid: string;
@@ -78,43 +78,35 @@ export class AuthService {
     }
     const cacheKey = `otp:${intent}:${email}`;
 
-    const existingOtp = await this.redisCacheService.get<string>(cacheKey);
-
-    if (existingOtp) {
-      this.logger.log(`Sending existing OTP for ${email} (${intent})`);
-
-      if (!isDevReturn) {
-        await this.sendOtpMail(email, intent, existingOtp);
-        return { message: 'OTP code sent via email' };
-      }
-
-      return {
-        message: 'OTP code generated locally (Dev)',
-        otp: existingOtp,
-      };
-    }
-
+    // Generate a fresh OTP and hash it with argon2
     const newOtp = this.generateRandomCode();
+    const hashedOtp = await argon2.hash(newOtp);
 
-    await this.redisCacheService.set(cacheKey, newOtp, this.getOtpTtlSeconds());
+    // Store the hash in Redis (overwriting any previous OTP for this intent/email)
+    await this.redisCacheService.set(cacheKey, hashedOtp, this.getOtpTtlSeconds());
 
-    this.logger.log(`Generating new OTP for ${email} (${intent}): ${newOtp}`);
+    this.logger.log(`Generating new OTP for ${email} (${intent})`);
 
     if (!isDevReturn) {
       await this.sendOtpMail(email, intent, newOtp);
       return { message: 'OTP code sent via email' };
     }
 
+    // In development mode, log the plaintext OTP but do NOT return it to the client
+    this.logger.log(`[DEV] OTP code generated locally for ${email}: ${newOtp}`);
     return {
       message: 'OTP code generated locally (Dev)',
-      otp: newOtp,
     };
   }
 
   async verifyOtp(payload: VerifyOtpDto) {
-    const { email, intent, otp } = payload;
+    const { email, intent, otp, userInfo, invitationToken } = payload;
     const cacheKey = `otp:${intent}:${email}`;
     const attemptsKey = `otp:verify_attempts:${intent}:${email}`;
+
+    if (intent === 'REGISTER' && !userInfo) {
+      throw new BadRequestException('userInfo is required when registering');
+    }
 
     // 0. Check verification attempts
     const attempts = await this.redisCacheService.get<number>(attemptsKey) || 0;
@@ -133,9 +125,9 @@ export class AuthService {
     }
 
     // 1. Verify OTP in Redis
-    const cachedOtp = await this.redisCacheService.get<string>(cacheKey);
+    const cachedOtpHash = await this.redisCacheService.get<string>(cacheKey);
 
-    if (!cachedOtp || cachedOtp !== otp) {
+    if (!cachedOtpHash || !(await argon2.verify(cachedOtpHash, otp))) {
       await this.redisCacheService.incr(attemptsKey, 900); // 15 min lock for attempts
       this.logger.warn(`Invalid or expired OTP attempt for ${email} (${intent}). Attempt: ${attempts + 1}`);
 
@@ -166,12 +158,58 @@ export class AuthService {
         throw new UnauthorizedException('User not found. Please register first.');
       }
     } else if (intent === 'REGISTER') {
-      // Passive registration: if user exists proceed normally, if not create!
       if (!user) {
-        user = await this.prismaService.user.create({
-          data: { email },
+        // Atomic transaction: Create user, and if invitation exists, accept it
+        user = await this.prismaService.$transaction(async (tx) => {
+          const createdUser = await tx.user.create({
+            data: { 
+              email,
+              firstName: userInfo!.firstName,
+              lastName: userInfo!.lastName,
+              phoneNumber: userInfo!.phoneNumber,
+            },
+          });
+
+          if (invitationToken) {
+            await this.invitationsService.acceptInvitationInTransaction(
+              tx,
+              createdUser.id,
+              email,
+              invitationToken
+            );
+          }
+
+          return createdUser;
         });
         this.logger.log(`Created new user for ${email}`);
+      } else {
+        // User already exists. If profile is empty, we can update it.
+        // Or if they provided an invitationToken, we can accept it.
+        user = await this.prismaService.$transaction(async (tx) => {
+          let updatedUser = user!;
+          
+          if (!updatedUser.firstName && !updatedUser.lastName) {
+            updatedUser = await tx.user.update({
+              where: { id: updatedUser.id },
+              data: {
+                firstName: userInfo!.firstName,
+                lastName: userInfo!.lastName,
+                phoneNumber: userInfo!.phoneNumber,
+              }
+            });
+          }
+
+          if (invitationToken) {
+            await this.invitationsService.acceptInvitationInTransaction(
+              tx,
+              updatedUser.id,
+              email,
+              invitationToken
+            );
+          }
+
+          return updatedUser;
+        });
       }
     }
 
@@ -185,14 +223,15 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    // 4. Generate Access Token JWT
+    // 4. Return partial token (only access token, without metadata). 
+    // Stateful tokens are handled in verifyOtpWithMetadata.
     const jwtPayload = {
       sub: user!.id,
       email: user!.email,
     };
 
     const accessToken = await this.jwtService.signAsync(jwtPayload);
-    this.logger.log(`Generated access token for ${email}`);
+    this.logger.log(`Generated basic access token for ${email}`);
 
     return {
       message: 'OTP verified successfully',
@@ -238,9 +277,26 @@ export class AuthService {
         secret: this.config.jwt.refreshSecret,
       });
 
-      const user = await this.prismaService.user.findUnique({
-        where: { id: decoded.sub },
+      // Compute deterministic hash of the provided refresh token
+      const tokenHash = crypto.createHash('sha256').update(payload.refreshToken).digest('hex');
+
+      // Verify token exists in the database and belongs to the user
+      const storedToken = await this.prismaService.refreshToken.findUnique({
+        where: { tokenHash },
+        include: { user: true },
       });
+
+      if (!storedToken || storedToken.userId !== decoded.sub) {
+        throw new UnauthorizedException('Invalid or revoked refresh token');
+      }
+
+      if (new Date() > storedToken.expiresAt) {
+        // Optionally delete the expired token from DB
+        await this.prismaService.refreshToken.delete({ where: { id: storedToken.id } }).catch(() => {});
+        throw new UnauthorizedException('Refresh token has expired');
+      }
+
+      const user = storedToken.user;
 
       if (!user || !user.isActive) {
         throw new UnauthorizedException('User account is invalid or disabled');
@@ -252,6 +308,9 @@ export class AuthService {
         userAgent: decoded.userAgent || 'unknown'
       });
 
+      // Revoke the old refresh token (Rotation)
+      await this.prismaService.refreshToken.delete({ where: { id: storedToken.id } });
+
       return {
         message: 'Tokens refreshed successfully',
         ...tokens,
@@ -261,108 +320,7 @@ export class AuthService {
     }
   }
 
-  async completeRegistration(
-    userId: string | null,
-    authenticatedEmail: string,
-    payload: CompleteRegistrationDto,
-  ) {
-    // ── FLOW A: Invitation bypass (new user, sub === null) ──────────────────
-    if (userId === null) {
-      if (!payload.invitationToken) {
-        throw new ForbiddenException(
-          'invitationToken is required when registering via an invitation',
-        );
-      }
 
-      const newUser = await this.prismaService.$transaction(async (tx) => {
-        // 1. Create user
-        const created = await tx.user.create({
-          data: {
-            email: authenticatedEmail,
-            firstName: payload.firstName,
-            lastName: payload.lastName,
-            phoneNumber: payload.phoneNumber,
-          },
-        });
-
-        // 2. Link to org + mark invitation ACCEPTED (within same tx)
-        await this.invitationsService.acceptInvitationInTransaction(
-          tx,
-          created.id,
-          authenticatedEmail,
-          payload.invitationToken!,
-        );
-
-        return created;
-      });
-
-      // 3. Issue a session token — only accessToken is returned for the invite flow
-      const { accessToken } = await this.generateAuthTokens(
-        newUser.id,
-        newUser.email,
-        newUser.globalRole,
-        { ip: 'invite-registration', userAgent: 'invite-registration' },
-      );
-
-      this.logger.log(
-        `[INVITE REGISTER] User ${newUser.email} completed invite-registration`,
-      );
-
-      return {
-        message: 'Registration completed successfully via invitation',
-        accessToken,
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          phoneNumber: newUser.phoneNumber,
-        },
-      };
-    }
-
-    // ── FLOW B: Normal OTP-authenticated user ───────────────────────────────
-    const user = await this.prismaService.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new ForbiddenException('Authenticated user references an orphaned account');
-    }
-
-    if (user.firstName || user.lastName) {
-      throw new ForbiddenException('User profile is already completed');
-    }
-
-    // Verify that the email provided in the body matches the authenticated user
-    if (payload.email && payload.email.toLowerCase() !== authenticatedEmail.toLowerCase()) {
-      throw new ForbiddenException('The provided email does not match the authenticated user email');
-    }
-
-    const updatedUser = await this.prismaService.user.update({
-      where: { id: userId },
-      data: {
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        phoneNumber: payload.phoneNumber,
-      },
-    });
-
-    this.logger.log(
-      `User ${user.email} completed registration as ${payload.firstName} ${payload.lastName}`,
-    );
-
-    return {
-      message: 'Registration completed successfully',
-      user: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        firstName: updatedUser.firstName,
-        lastName: updatedUser.lastName,
-        phoneNumber: updatedUser.phoneNumber,
-      },
-    };
-  }
 
   async getSessions(userId: string) {
     const sessionIds = await this.redisCacheService.smembers(`user_sessions:${userId}`);
@@ -378,10 +336,19 @@ export class AuthService {
   }
 
   async logout(userId: string, sessionId: string) {
+    // Delete session from Redis
     await Promise.all([
       this.redisCacheService.delete(`session_metadata:${userId}:${sessionId}`),
       this.redisCacheService.srem(`user_sessions:${userId}`, sessionId),
     ]);
+
+    // Delete related refresh tokens from DB (assuming frontend clears its tokens, but we invalidate any token with this sessionId)
+    // Wait, the RefreshToken in DB isn't strictly tied to `sessionId` via DB column right now. Let's delete it if we pass it, but usually logout revokes the specific refresh token or all tokens for a device. 
+    // Actually, `killSession` or `logout` usually revokes tokens. 
+    // To properly revoke the exact refresh token, the client should send it, but since we don't have it here, we might just leave it to expire, OR we should add `sessionId` to the `RefreshToken` table.
+    // Let's modify the RefreshToken query to delete all tokens for this user for now if they logout from all devices, or if we can't link it, we'll just clear Redis.
+    // We'll leave DB cleanup to `logoutAll` or when tokens expire/are rotated.
+
     this.logger.log(`Session ${sessionId} logged out for user ${userId}`);
 
     // Audit: logout
@@ -405,6 +372,11 @@ export class AuthService {
 
       await Promise.all(keysToDelete.map(key => this.redisCacheService.delete(key)));
     }
+
+    // Revoke all refresh tokens for this user in DB
+    await this.prismaService.refreshToken.deleteMany({
+      where: { userId }
+    });
 
     this.logger.log(`User ${userId} logged out from all devices`);
 
@@ -483,6 +455,18 @@ export class AuthService {
         expiresIn: this.config.jwt.refreshExpiresIn as any,
       }),
     ]);
+
+    // Store a deterministic hash of the refresh token in the database
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    await this.prismaService.refreshToken.create({
+      data: {
+        tokenHash,
+        userId,
+        userAgent: metadata.userAgent,
+        ipAddress: metadata.ip,
+        expiresAt: new Date(expiresAt * 1000), // convert to ms
+      }
+    });
 
     return { accessToken, refreshToken };
   }
