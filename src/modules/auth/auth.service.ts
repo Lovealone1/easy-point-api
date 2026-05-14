@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, ForbiddenException, UnauthorizedException, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
+import { Inject, Injectable, Logger, ForbiddenException, UnauthorizedException, NotFoundException, HttpException, HttpStatus, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GlobalRole } from '@prisma/client';
@@ -9,7 +9,6 @@ import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { GenerateOtpDto } from './dto/generate-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
-import { CompleteRegistrationDto } from './dto/complete-registration.dto.js';
 import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.template.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { AuditService } from '../../infraestructure/audit/audit.service.js';
@@ -101,9 +100,13 @@ export class AuthService {
   }
 
   async verifyOtp(payload: VerifyOtpDto) {
-    const { email, intent, otp } = payload;
+    const { email, intent, otp, userInfo, invitationToken } = payload;
     const cacheKey = `otp:${intent}:${email}`;
     const attemptsKey = `otp:verify_attempts:${intent}:${email}`;
+
+    if (intent === 'REGISTER' && !userInfo) {
+      throw new BadRequestException('userInfo is required when registering');
+    }
 
     // 0. Check verification attempts
     const attempts = await this.redisCacheService.get<number>(attemptsKey) || 0;
@@ -155,12 +158,58 @@ export class AuthService {
         throw new UnauthorizedException('User not found. Please register first.');
       }
     } else if (intent === 'REGISTER') {
-      // Passive registration: if user exists proceed normally, if not create!
       if (!user) {
-        user = await this.prismaService.user.create({
-          data: { email },
+        // Atomic transaction: Create user, and if invitation exists, accept it
+        user = await this.prismaService.$transaction(async (tx) => {
+          const createdUser = await tx.user.create({
+            data: { 
+              email,
+              firstName: userInfo!.firstName,
+              lastName: userInfo!.lastName,
+              phoneNumber: userInfo!.phoneNumber,
+            },
+          });
+
+          if (invitationToken) {
+            await this.invitationsService.acceptInvitationInTransaction(
+              tx,
+              createdUser.id,
+              email,
+              invitationToken
+            );
+          }
+
+          return createdUser;
         });
         this.logger.log(`Created new user for ${email}`);
+      } else {
+        // User already exists. If profile is empty, we can update it.
+        // Or if they provided an invitationToken, we can accept it.
+        user = await this.prismaService.$transaction(async (tx) => {
+          let updatedUser = user!;
+          
+          if (!updatedUser.firstName && !updatedUser.lastName) {
+            updatedUser = await tx.user.update({
+              where: { id: updatedUser.id },
+              data: {
+                firstName: userInfo!.firstName,
+                lastName: userInfo!.lastName,
+                phoneNumber: userInfo!.phoneNumber,
+              }
+            });
+          }
+
+          if (invitationToken) {
+            await this.invitationsService.acceptInvitationInTransaction(
+              tx,
+              updatedUser.id,
+              email,
+              invitationToken
+            );
+          }
+
+          return updatedUser;
+        });
       }
     }
 
@@ -174,14 +223,15 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    // 4. Generate Access Token JWT
+    // 4. Return partial token (only access token, without metadata). 
+    // Stateful tokens are handled in verifyOtpWithMetadata.
     const jwtPayload = {
       sub: user!.id,
       email: user!.email,
     };
 
     const accessToken = await this.jwtService.signAsync(jwtPayload);
-    this.logger.log(`Generated access token for ${email}`);
+    this.logger.log(`Generated basic access token for ${email}`);
 
     return {
       message: 'OTP verified successfully',
@@ -270,108 +320,7 @@ export class AuthService {
     }
   }
 
-  async completeRegistration(
-    userId: string | null,
-    authenticatedEmail: string,
-    payload: CompleteRegistrationDto,
-  ) {
-    // ── FLOW A: Invitation bypass (new user, sub === null) ──────────────────
-    if (userId === null) {
-      if (!payload.invitationToken) {
-        throw new ForbiddenException(
-          'invitationToken is required when registering via an invitation',
-        );
-      }
 
-      const newUser = await this.prismaService.$transaction(async (tx) => {
-        // 1. Create user
-        const created = await tx.user.create({
-          data: {
-            email: authenticatedEmail,
-            firstName: payload.firstName,
-            lastName: payload.lastName,
-            phoneNumber: payload.phoneNumber,
-          },
-        });
-
-        // 2. Link to org + mark invitation ACCEPTED (within same tx)
-        await this.invitationsService.acceptInvitationInTransaction(
-          tx,
-          created.id,
-          authenticatedEmail,
-          payload.invitationToken!,
-        );
-
-        return created;
-      });
-
-      // 3. Issue a session token — only accessToken is returned for the invite flow
-      const { accessToken } = await this.generateAuthTokens(
-        newUser.id,
-        newUser.email,
-        newUser.globalRole,
-        { ip: 'invite-registration', userAgent: 'invite-registration' },
-      );
-
-      this.logger.log(
-        `[INVITE REGISTER] User ${newUser.email} completed invite-registration`,
-      );
-
-      return {
-        message: 'Registration completed successfully via invitation',
-        accessToken,
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          phoneNumber: newUser.phoneNumber,
-        },
-      };
-    }
-
-    // ── FLOW B: Normal OTP-authenticated user ───────────────────────────────
-    const user = await this.prismaService.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new ForbiddenException('Authenticated user references an orphaned account');
-    }
-
-    if (user.firstName || user.lastName) {
-      throw new ForbiddenException('User profile is already completed');
-    }
-
-    // Verify that the email provided in the body matches the authenticated user
-    if (payload.email && payload.email.toLowerCase() !== authenticatedEmail.toLowerCase()) {
-      throw new ForbiddenException('The provided email does not match the authenticated user email');
-    }
-
-    const updatedUser = await this.prismaService.user.update({
-      where: { id: userId },
-      data: {
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        phoneNumber: payload.phoneNumber,
-      },
-    });
-
-    this.logger.log(
-      `User ${user.email} completed registration as ${payload.firstName} ${payload.lastName}`,
-    );
-
-    return {
-      message: 'Registration completed successfully',
-      user: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        firstName: updatedUser.firstName,
-        lastName: updatedUser.lastName,
-        phoneNumber: updatedUser.phoneNumber,
-      },
-    };
-  }
 
   async getSessions(userId: string) {
     const sessionIds = await this.redisCacheService.smembers(`user_sessions:${userId}`);
