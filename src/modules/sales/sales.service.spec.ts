@@ -1,3 +1,4 @@
+
 import { Test, TestingModule } from '@nestjs/testing';
 jest.mock('nanoid', () => ({ customAlphabet: () => jest.fn() }));
 import { SalesService } from './sales.service.js';
@@ -7,6 +8,7 @@ import { InventoryMovementsRepository } from '../inventory-movements/inventory-m
 import { ProductStocksRepository } from '../product-stocks/product-stocks.repository.js';
 import { FinancialTransactionsService } from '../financial-transactions/financial-transactions.service.js';
 import { UtilitiesService } from '../utilities/utilities.service.js';
+import { DiscountRulesService } from '../discount-rules/discount-rules.service.js';
 import { Prisma, SaleStatus, TransactionType, PaymentMethod } from '@prisma/client';
 import { BadRequestException, NotFoundException, ConflictException, UnprocessableEntityException } from '@nestjs/common';
 import { SaleEntity } from './domain/sale.entity.js';
@@ -29,6 +31,9 @@ describe('SalesService', () => {
     inventoryMovement: { findMany: jest.fn(), deleteMany: jest.fn() },
     sale: { delete: jest.fn() },
     financialTransaction: { findUnique: jest.fn() },
+    appliedDiscount: { create: jest.fn() },
+    discountRule: { update: jest.fn() },
+    client: { findUnique: jest.fn() },
   };
 
   const mockSalesRepo = {
@@ -55,6 +60,10 @@ describe('SalesService', () => {
     deleteForSale: jest.fn(),
   };
 
+  const mockDiscountRulesService = {
+    findByCode: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -65,6 +74,7 @@ describe('SalesService', () => {
         { provide: ProductStocksRepository, useValue: mockProductStocksRepo },
         { provide: FinancialTransactionsService, useValue: mockFinancialTxService },
         { provide: UtilitiesService, useValue: mockUtilitiesService },
+        { provide: DiscountRulesService, useValue: mockDiscountRulesService },
       ],
     }).compile();
 
@@ -101,11 +111,11 @@ describe('SalesService', () => {
 
     it('should successfully create a COMPLETED sale', async () => {
       getTenantId.mockReturnValue(mockOrgId);
-      
+
       // Mocks for resolveStocks
       mockPrisma.product.count.mockResolvedValueOnce(1);
       mockPrisma.productStock.findUnique.mockResolvedValueOnce({ id: 'stock-1' });
-      
+
       // Mocks for validateSufficientStock
       mockPrisma.productStock.findMany.mockResolvedValueOnce([
         { id: 'stock-1', quantity: new Prisma.Decimal(10) }
@@ -138,6 +148,132 @@ describe('SalesService', () => {
       expect(mockFinancialTxService.createTransaction).toHaveBeenCalled();
       expect(mockUtilitiesService.computeAndPersist).toHaveBeenCalled();
     });
+
+    it('should throw BadRequestException if discount code is invalid for client', async () => {
+      getTenantId.mockReturnValue(mockOrgId);
+      mockPrisma.client.findUnique.mockResolvedValueOnce({ id: 'client-1', organizationId: mockOrgId });
+
+      const mockRule = {
+        scope: 'CLIENT',
+        clientId: 'client-different',
+        canApply: jest.fn().mockReturnValue(true)
+      };
+      mockDiscountRulesService.findByCode.mockResolvedValueOnce(mockRule);
+
+      const dto = {
+        clientId: 'client-1',
+        discountCode: 'PROM25',
+        status: SaleStatus.PENDING,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100 }],
+      };
+
+      await expect(service.create(mockUserId, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if discount rule cannot be applied', async () => {
+      getTenantId.mockReturnValue(mockOrgId);
+
+      const mockRule = {
+        scope: 'GLOBAL',
+        canApply: jest.fn().mockReturnValue(false)
+      };
+      mockDiscountRulesService.findByCode.mockResolvedValueOnce(mockRule);
+
+      const dto = {
+        discountCode: 'PROM25',
+        status: SaleStatus.PENDING,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 10 }],
+      };
+
+      await expect(service.create(mockUserId, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should process normally and log warning if discount code is not found', async () => {
+      getTenantId.mockReturnValue(mockOrgId);
+      mockDiscountRulesService.findByCode.mockRejectedValueOnce(new NotFoundException());
+
+      // Stock mocks
+      mockPrisma.product.count.mockResolvedValueOnce(1);
+      mockPrisma.productStock.findUnique.mockResolvedValueOnce({ id: 'stock-1' });
+      mockPrisma.productStock.findMany.mockResolvedValueOnce([{ id: 'stock-1', quantity: new Prisma.Decimal(10) }]);
+
+      const createdSale = new SaleEntity({
+        id: 'sale-1', organizationId: mockOrgId, clientId: null,
+        subtotalAmount: new Prisma.Decimal(10), discountAmount: null, totalAmount: new Prisma.Decimal(10),
+        transactionId: null, status: SaleStatus.PENDING, notes: null,
+        performedByUserId: mockUserId, createdAt: new Date(), updatedAt: new Date(),
+      });
+      mockSalesRepo.create.mockResolvedValueOnce(createdSale);
+
+      const dto = {
+        discountCode: 'INVALID-CODE',
+        status: SaleStatus.PENDING,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 10 }],
+      };
+
+      await service.create(mockUserId, dto);
+      expect(mockSalesRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ discountAmount: null }),
+        expect.anything()
+      );
+    });
+
+    it('should successfully apply discount and store AppliedDiscount', async () => {
+      getTenantId.mockReturnValue(mockOrgId);
+
+      const mockRule = {
+        id: 'rule-1',
+        type: 'PERCENTAGE',
+        value: new Prisma.Decimal(10),
+        scope: 'GLOBAL',
+        canApply: jest.fn().mockReturnValue(true),
+        computeDiscountAmount: jest.fn().mockReturnValue(new Prisma.Decimal(10)) // $10 off $100
+      };
+      mockDiscountRulesService.findByCode.mockResolvedValueOnce(mockRule);
+
+      // Stock mocks
+      mockPrisma.product.count.mockResolvedValueOnce(1);
+      mockPrisma.productStock.findUnique.mockResolvedValueOnce({ id: 'stock-1' });
+      mockPrisma.productStock.findMany.mockResolvedValueOnce([{ id: 'stock-1', quantity: new Prisma.Decimal(10) }]);
+
+      const createdSale = new SaleEntity({
+        id: 'sale-1', organizationId: mockOrgId, clientId: null,
+        subtotalAmount: new Prisma.Decimal(100), discountAmount: new Prisma.Decimal(10), totalAmount: new Prisma.Decimal(90),
+        transactionId: null, status: SaleStatus.PENDING, notes: null,
+        performedByUserId: mockUserId, createdAt: new Date(), updatedAt: new Date(),
+      });
+      mockSalesRepo.create.mockResolvedValueOnce(createdSale);
+
+      const dto = {
+        discountCode: 'PROM10',
+        status: SaleStatus.PENDING,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100 }],
+      };
+
+      await service.create(mockUserId, dto);
+
+      expect(mockSalesRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subtotalAmount: expect.any(Prisma.Decimal),
+          discountAmount: expect.any(Prisma.Decimal),
+          totalAmount: expect.any(Prisma.Decimal),
+        }),
+        expect.anything()
+      );
+
+      expect(mockPrisma.appliedDiscount.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          saleId: 'sale-1',
+          discountRuleId: 'rule-1',
+          discountAmount: expect.any(Prisma.Decimal),
+        })
+      });
+
+      expect(mockPrisma.discountRule.update).toHaveBeenCalledWith({
+        where: { id: 'rule-1' },
+        data: { usageCount: { increment: 1 } }
+      });
+    });
   });
 
   describe('complete', () => {
@@ -162,12 +298,12 @@ describe('SalesService', () => {
   describe('remove', () => {
     it('should cancel a COMPLETED sale and create a DEBIT refund transaction', async () => {
       getTenantId.mockReturnValue(mockOrgId);
-      
-      const existingSale = { 
-        id: 'sale-1', organizationId: mockOrgId, status: SaleStatus.COMPLETED, 
-        transactionId: 'txn-old', totalAmount: new Prisma.Decimal(100) 
+
+      const existingSale = {
+        id: 'sale-1', organizationId: mockOrgId, status: SaleStatus.COMPLETED,
+        transactionId: 'txn-old', totalAmount: new Prisma.Decimal(100)
       };
-      
+
       mockSalesRepo.findById.mockResolvedValueOnce(existingSale);
       mockPrisma.inventoryMovement.findMany.mockResolvedValueOnce([
         { stockId: 'stock-1', quantity: new Prisma.Decimal(5) }
@@ -178,7 +314,7 @@ describe('SalesService', () => {
 
       // Restores stock
       expect(mockProductStocksRepo.incrementQuantity).toHaveBeenCalledWith('stock-1', new Prisma.Decimal(5), mockPrisma);
-      
+
       // Creates refund
       expect(mockFinancialTxService.createTransaction).toHaveBeenCalledWith(
         expect.objectContaining({ type: TransactionType.DEBIT, amount: new Prisma.Decimal(100) }),
