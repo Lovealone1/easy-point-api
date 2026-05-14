@@ -7,7 +7,6 @@ import { DevelopmentController } from './development.controller.js';
 import { AuthService } from './auth.service.js';
 import { RedisModule } from '../../infraestructure/redis/redis.module.js';
 import { MailService } from '../../infraestructure/mail/mail.service.js';
-import { InviteOrJwtGuard } from '../../common/guards/invite-or-jwt.guard.js';
 import { InvitationsModule } from '../invitations/invitations.module.js';
 
 @Module({
@@ -26,7 +25,6 @@ import { InvitationsModule } from '../invitations/invitations.module.js';
     forwardRef(() => InvitationsModule),
   ],
   controllers: [AuthController, DevelopmentController],
-  providers: [AuthService, MailService, InviteOrJwtGuard],
+  providers: [AuthService, MailService],
 })
 export class AuthModule {}
-

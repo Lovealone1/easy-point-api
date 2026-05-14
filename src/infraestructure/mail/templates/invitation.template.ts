@@ -1,21 +1,15 @@
-export function getOtpEmailTemplate(otp: string, intent: string): string {
-  const isRegister = intent === 'REGISTER';
-  const mainTitle = isRegister ? 'Confirm your email address' : 'Verify your login attempt';
-  const description = isRegister
-    ? 'Use the code below to verify your email and complete your registration for Easy Point.'
-    : 'Use the code below to verify your identity and complete your login to Easy Point.';
-
-  // We no longer format the OTP with physical spaces. 
-  // Instead, we will use CSS letter-spacing so that when the user double-taps 
-  // or copies the code, it copies as a single continuous string (e.g. "123456").
-
+export function getInvitationEmailTemplate(
+  organizationName: string,
+  roleName: string,
+  invitationLink: string,
+): string {
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Easy Point - OTP</title>
+  <title>Easy Point - Invitation</title>
   <style>
     body {
       margin: 0;
@@ -76,35 +70,36 @@ export function getOtpEmailTemplate(otp: string, intent: string): string {
       font-size: 15px;
       line-height: 1.6;
     }
-    .code-container {
-      background-color: #fafafa;
-      border: 1px solid #e4e4e7;
-      border-radius: 12px;
-      padding: 32px 20px;
+    .btn-container {
       margin: 0 auto;
     }
-    .code-container .label {
-      font-size: 11px;
+    .btn {
+      display: inline-block;
+      background-color: #18181b;
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 16px;
       font-weight: 600;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: #a1a1aa;
-      margin: 0 0 12px 0;
+      padding: 14px 28px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    .code-container .code {
-      font-size: 40px;
-      font-weight: 800;
-      letter-spacing: 0.2em; /* CSS letter-spacing instead of physical spaces */
-      color: #18181b;
-      margin: 0 0 12px 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      user-select: all; /* Makes it easy to select the whole code on double tap */
-      -webkit-user-select: all;
+    .btn:hover {
+      background-color: #27272a;
     }
-    .code-container .expires {
+    .link-container {
+      margin-top: 32px;
+      word-break: break-all;
+    }
+    .link-container p {
       font-size: 13px;
       color: #a1a1aa;
       margin: 0;
+    }
+    .link-container a {
+      font-size: 13px;
+      color: #3b82f6;
+      text-decoration: underline;
     }
     .footer {
       padding: 0 32px 32px 32px;
@@ -119,21 +114,27 @@ export function getOtpEmailTemplate(otp: string, intent: string): string {
   <div class="wrapper">
     <div class="main-container">
       <div class="header">
-        <h1>Easy Point Auth</h1>
-        <p>Security OTP</p>
+        <h1>Easy Point</h1>
+        <p>Organization Invitation</p>
       </div>
       <div class="content">
-        <h2>${mainTitle}</h2>
-        <p class="description">${description}</p>
+        <h2>You've been invited!</h2>
+        <p class="description">
+          You have been invited to join <strong>${organizationName}</strong> with the role of <strong>${roleName}</strong>.
+          Click the button below to accept your invitation and join the organization.
+        </p>
         
-        <div class="code-container">
-          <p class="label">VERIFICATION CODE</p>
-          <p class="code">${otp}</p>
-          <p class="expires">Expires in 15 minutes</p>
+        <div class="btn-container">
+          <a href="${invitationLink}" class="btn">Accept Invitation</a>
+        </div>
+
+        <div class="link-container">
+          <p>Or copy and paste this link into your browser:</p>
+          <a href="${invitationLink}">${invitationLink}</a>
         </div>
       </div>
       <div class="footer">
-        If you didn't request this code, you can safely ignore this email.
+        If you don't know this organization, you can safely ignore this email.
       </div>
     </div>
   </div>

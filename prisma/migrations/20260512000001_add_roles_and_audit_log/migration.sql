@@ -117,17 +117,25 @@ ALTER TABLE "invitations"
 -- AUDIT LOG — Append-only compliance & traceability store
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE TYPE IF NOT EXISTS "AuditAction" AS ENUM (
-    'CREATE', 'UPDATE', 'DELETE', 'RESTORE',
-    'LOGIN', 'LOGOUT', 'LOGIN_FAILED',
-    'PASSWORD_CHANGE', 'ROLE_CHANGE', 'PERMISSION_CHANGE',
-    'EXPORT', 'CANCEL', 'API_KEY_CHANGE',
-    'TENANT_CONFIG_CHANGE', 'SESSION_KILL', 'CUSTOM'
-);
+DO $$ BEGIN
+    CREATE TYPE "AuditAction" AS ENUM (
+        'CREATE', 'UPDATE', 'DELETE', 'RESTORE',
+        'LOGIN', 'LOGOUT', 'LOGIN_FAILED',
+        'PASSWORD_CHANGE', 'ROLE_CHANGE', 'PERMISSION_CHANGE',
+        'EXPORT', 'CANCEL', 'API_KEY_CHANGE',
+        'TENANT_CONFIG_CHANGE', 'SESSION_KILL', 'CUSTOM'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
-CREATE TYPE IF NOT EXISTS "AuditSeverity" AS ENUM (
-    'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
-);
+DO $$ BEGIN
+    CREATE TYPE "AuditSeverity" AS ENUM (
+        'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Audit log table — NEVER UPDATE OR DELETE ROWS from application code
 CREATE TABLE IF NOT EXISTS "audit_logs" (
