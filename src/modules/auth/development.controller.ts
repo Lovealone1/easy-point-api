@@ -18,7 +18,7 @@ export class DevelopmentController {
   @ApiOkResponse({ description: 'The OTP has been generated successfully and returned.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
   async generateDevOtp(@Body() payload: GenerateOtpDto) {
-    // isDevReturn = true
+    // isDevMode = true
     return this.authService.generateOtp(payload, true);
   }
 

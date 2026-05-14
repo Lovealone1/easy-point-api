@@ -680,8 +680,9 @@ model Sale {
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  totalAmount    Decimal  @db.Decimal(19, 4)
+  subtotalAmount Decimal? @db.Decimal(19, 4)
   discountAmount Decimal? @db.Decimal(19, 4)
+  totalAmount    Decimal  @db.Decimal(19, 4)
 
   transactionId String?               @unique
   transaction   FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
