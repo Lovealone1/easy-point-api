@@ -77,10 +77,7 @@ export class InvitationsService {
       expiresAt,
     });
 
-    // ── DEV EVENT: log token to console instead of sending email ──
-    this.logger.log(
-      `[INVITATION CREATED] id=${invitation.id} | email=${email} | role=${role} | token=${token} | expiresAt=${expiresAt.toISOString()}`,
-    );
+
 
     const organization = await this.prismaService.organization.findUnique({
       where: { id: organizationId },
@@ -262,5 +259,45 @@ export class InvitationsService {
       where: { id: invitation.id },
       data: { status: InvitationStatus.ACCEPTED },
     });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DEV ONLY: Get pending invitations
+  // ────────────────────────────────────────────────────────────────────────────
+  async getDevInvitations() {
+    if (this.config.app.env === 'production') {
+      import('@nestjs/common').then(m => {
+        throw new m.ForbiddenException('Development endpoints are disabled in production');
+      });
+    }
+
+    const invitations = await this.prismaService.invitation.findMany({
+      where: { status: InvitationStatus.PENDING },
+      select: {
+        id: true,
+        email: true,
+        token: true,
+        expiresAt: true,
+        organization: { select: { name: true } },
+        role: { select: { name: true } }
+      },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    this.logger.log(`[DEV ONLY] Showing ${invitations.length} pending invitations in console:`);
+    console.table(
+      invitations.map(inv => ({
+        email: inv.email,
+        token: inv.token,
+        organization: inv.organization.name,
+        role: inv.role.name,
+      }))
+    );
+
+    return {
+      message: 'Dev only: Pending invitations',
+      count: invitations.length,
+      invitations,
+    };
   }
 }
