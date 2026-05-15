@@ -22,7 +22,7 @@ describe('InvitationsService', () => {
         InvitationsService,
         {
           provide: appConfig.KEY,
-          useValue: { jwt: { secret: 'secret' } },
+          useValue: { jwt: { secret: 'secret' }, app: { frontendUrl: 'http://localhost:3000' } },
         },
         {
           provide: InvitationsRepository,
@@ -41,6 +41,8 @@ describe('InvitationsService', () => {
           provide: PrismaService,
           useValue: {
             user: { findUnique: jest.fn() },
+            organization: { findUnique: jest.fn() },
+            role: { findUnique: jest.fn() },
             organizationUser: { create: jest.fn() },
             invitation: { update: jest.fn() },
             $transaction: jest.fn(),
@@ -76,6 +78,8 @@ describe('InvitationsService', () => {
     it('should create invitation successfully', async () => {
       invitationsRepository.findByEmailAndOrg.mockResolvedValueOnce(null);
       invitationsRepository.create.mockResolvedValueOnce({ id: 'inv-id', token: 'token' } as any);
+      prismaService.organization.findUnique.mockResolvedValueOnce({ name: 'Test Org' });
+      prismaService.role.findUnique.mockResolvedValueOnce({ id: 'role-id', name: 'ADMINISTRATOR' });
 
       const result = await service.createInvitation('org-id', { email: 'test@test.com', role: Role.ADMINISTRATOR });
       expect(result.invitationId).toBe('inv-id');

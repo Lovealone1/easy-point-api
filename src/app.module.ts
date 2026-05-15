@@ -39,6 +39,7 @@ import { RolesModule } from './modules/roles/roles.module.js';
 import { AuditModule } from './infraestructure/audit/audit.module.js';
 import { DiscountRulesModule } from './modules/discount-rules/discount-rules.module.js';
 import { StorageModule } from './infraestructure/storage/storage.module.js';
+import { OrganizationConfigsModule } from './modules/organization-configs/organization-configs.module.js';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { StorageModule } from './infraestructure/storage/storage.module.js';
     // ── Feature modules ───────────────────────────────────────────────────
     AuthModule,
     OrganizationsModule,
+    OrganizationConfigsModule,
     OrganizationUsersModule,
     InvitationsModule,
     ClientsModule,
