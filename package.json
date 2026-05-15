@@ -81,6 +81,17 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/engines",
+      "@scarf/scarf",
+      "argon2",
+      "msgpackr-extract",
+      "prisma",
+      "unrs-resolver"
+    ]
+  },
   "jest": {
     "moduleFileExtensions": [
       "js",

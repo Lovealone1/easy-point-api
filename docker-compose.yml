@@ -1,6 +1,31 @@
 services:
 
-  # Redis cache
+  # ── NestJS API (dev – hot reload) ─────────────────────────────────────────
+  easy-point-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: easy-point-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      # Override Redis host: dentro de Docker usa el nombre del servicio
+      - REDIS_HOST=social-redis
+    volumes:
+      # Hot-reload: monta src en vivo; node_modules queda aislado en el contenedor
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - ./generated:/app/generated
+      - /app/node_modules
+    depends_on:
+      - social-redis
+    networks:
+      - easy-point-net
+
+  # ── Redis cache ────────────────────────────────────────────────────────────
   social-redis:
     image: redis:7-alpine
     container_name: social-redis
@@ -12,8 +37,10 @@ services:
       - redis_data:/data
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+    networks:
+      - easy-point-net
 
-  # Redis Commander - Web UI for Redis
+  # ── Redis Commander – Web UI ───────────────────────────────────────────────
   redis-commander:
     image: rediscommander/redis-commander:latest
     container_name: redis-commander
@@ -25,6 +52,12 @@ services:
       - "127.0.0.1:8081:8081"
     depends_on:
       - social-redis
+    networks:
+      - easy-point-net
+
+networks:
+  easy-point-net:
+    driver: bridge
 
 volumes:
   redis_data:

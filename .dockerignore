@@ -1,0 +1,29 @@
+# Directorios generados en tiempo de build / runtime
+node_modules
+dist
+coverage
+.nyc_output
+
+# Variables de entorno (se pasan por docker-compose)
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Herramientas locales
+.agents
+.vscode
+.idea
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+.pnpm-DS_Store
+
+# Prisma output generado localmente (se regenera en el contenedor)
+generated/prisma
