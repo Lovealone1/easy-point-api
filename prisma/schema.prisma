@@ -20,6 +20,12 @@ enum Plan {
   PREMIUM
 }
 
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
 enum OrganizationStatus {
   ACTIVE
   INACTIVE
@@ -67,6 +73,7 @@ model Organization {
   updatedAt       DateTime           @updatedAt
 
   members               OrganizationUser[]
+  config                OrganizationConfig?
   invitations           Invitation[]
   clients               Client[]
   suppliers             Supplier[]
@@ -112,6 +119,34 @@ model OrganizationUser {
   @@index([userId])
   @@index([organizationId])
   @@map("organization_users")
+}
+
+model OrganizationConfig {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  // UI & Branding
+  logoUrl        String?
+  primaryColor   String?      @default("#000000")
+  defaultTheme   Theme        @default(SYSTEM)
+  
+  // Regional settings
+  timezone       String       @default("UTC")
+  currency       String       @default("USD")
+  language       String       @default("es")
+  dateFormat     String       @default("DD/MM/YYYY")
+  
+  // Business info
+  taxId          String?
+  address        String?
+  phone          String?
+  receiptFooter  String?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("organization_configs")
 }
 
 enum InvitationStatus {
