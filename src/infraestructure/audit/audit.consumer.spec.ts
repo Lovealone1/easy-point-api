@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { AuditConsumer } from './audit.consumer';
 import { AuditRepository } from './audit.repository';
 import { AuditAction } from './enums/audit-action.enum';
@@ -25,6 +26,7 @@ describe('AuditConsumer', () => {
   let consumer: AuditConsumer;
   let repository: { create: jest.Mock };
   let stdoutSpy: jest.SpyInstance;
+  let loggerErrorSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     repository = { create: jest.fn().mockResolvedValue({ id: 'audit-001', ...mockEvent }) };
@@ -38,9 +40,14 @@ describe('AuditConsumer', () => {
 
     consumer = module.get<AuditConsumer>(AuditConsumer);
     stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
   });
 
-  afterEach(() => { stdoutSpy.mockRestore(); jest.clearAllMocks(); });
+  afterEach(() => { 
+    stdoutSpy.mockRestore(); 
+    loggerErrorSpy.mockRestore();
+    jest.clearAllMocks(); 
+  });
 
   it('persists the audit event via AuditRepository', async () => {
     await consumer.handleAuditEvent(mockEvent);

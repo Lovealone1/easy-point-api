@@ -1,0 +1,93 @@
+import { Theme } from '@prisma/client';
+
+export class OrganizationConfigEntity {
+  readonly id: string;
+  readonly organizationId: string;
+  
+  logoUrl: string | null;
+  primaryColor: string | null;
+  defaultTheme: Theme;
+  
+  timezone: string;
+  currency: string;
+  language: string;
+  dateFormat: string;
+  
+  taxId: string | null;
+  address: string | null;
+  phone: string | null;
+  receiptFooter: string | null;
+
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+
+  constructor(params: {
+    id: string;
+    organizationId: string;
+    logoUrl: string | null;
+    primaryColor: string | null;
+    defaultTheme: Theme;
+    timezone: string;
+    currency: string;
+    language: string;
+    dateFormat: string;
+    taxId: string | null;
+    address: string | null;
+    phone: string | null;
+    receiptFooter: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    this.id = params.id;
+    this.organizationId = params.organizationId;
+    this.logoUrl = params.logoUrl;
+    this.primaryColor = params.primaryColor;
+    this.defaultTheme = params.defaultTheme;
+    this.timezone = params.timezone;
+    this.currency = params.currency;
+    this.language = params.language;
+    this.dateFormat = params.dateFormat;
+    this.taxId = params.taxId;
+    this.address = params.address;
+    this.phone = params.phone;
+    this.receiptFooter = params.receiptFooter;
+    this.createdAt = params.createdAt;
+    this.updatedAt = params.updatedAt;
+  }
+
+  static fromPrisma(raw: {
+    id: string;
+    organizationId: string;
+    logoUrl: string | null;
+    primaryColor: string | null;
+    defaultTheme: Theme;
+    timezone: string;
+    currency: string;
+    language: string;
+    dateFormat: string;
+    taxId: string | null;
+    address: string | null;
+    phone: string | null;
+    receiptFooter: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): OrganizationConfigEntity {
+    return new OrganizationConfigEntity({
+      id: raw.id,
+      organizationId: raw.organizationId,
+      logoUrl: raw.logoUrl,
+      primaryColor: raw.primaryColor,
+      defaultTheme: raw.defaultTheme,
+      timezone: raw.timezone,
+      currency: raw.currency,
+      language: raw.language,
+      dateFormat: raw.dateFormat,
+      taxId: raw.taxId,
+      address: raw.address,
+      phone: raw.phone,
+      receiptFooter: raw.receiptFooter,
+      createdAt: raw.createdAt,
+      updatedAt: raw.updatedAt,
+    });
+  }
+}
