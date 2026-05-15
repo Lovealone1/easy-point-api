@@ -65,6 +65,13 @@ interface AppConfigShape {
     refreshSecret: string;
     refreshExpiresIn: string;
   };
+  s3: {
+    endpoint: string;
+    region: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    bucketName: string;
+  };
 }
 
 function getString(key: string, fallback = ''): string {
@@ -206,5 +213,12 @@ export default registerAs('app', (): AppConfig => ({
     expiresIn: getString('JWT_EXPIRES_IN', '7d'),
     refreshSecret: getString('JWT_REFRESH_SECRET', 'fallback_refresh_secreto_7X'),
     refreshExpiresIn: getString('JWT_REFRESH_EXPIRES_IN', '30d'),
+  },
+  s3: {
+    endpoint: getString('S3_ENDPOINT'),
+    region: getString('S3_REGION', 'us-east-1'),
+    accessKeyId: getString('S3_ACCESS_KEY_ID'),
+    secretAccessKey: getString('S3_SECRET_ACCESS_KEY'),
+    bucketName: getString('S3_BUCKET_NAME'),
   },
 }));
