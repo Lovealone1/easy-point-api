@@ -335,19 +335,24 @@ export class AuthService {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  async logout(userId: string, sessionId: string) {
+  async logout(userId: string, sessionId: string, refreshTokenString?: string) {
     // Delete session from Redis
     await Promise.all([
       this.redisCacheService.delete(`session_metadata:${userId}:${sessionId}`),
       this.redisCacheService.srem(`user_sessions:${userId}`, sessionId),
     ]);
 
-    // Delete related refresh tokens from DB (assuming frontend clears its tokens, but we invalidate any token with this sessionId)
-    // Wait, the RefreshToken in DB isn't strictly tied to `sessionId` via DB column right now. Let's delete it if we pass it, but usually logout revokes the specific refresh token or all tokens for a device. 
-    // Actually, `killSession` or `logout` usually revokes tokens. 
-    // To properly revoke the exact refresh token, the client should send it, but since we don't have it here, we might just leave it to expire, OR we should add `sessionId` to the `RefreshToken` table.
-    // Let's modify the RefreshToken query to delete all tokens for this user for now if they logout from all devices, or if we can't link it, we'll just clear Redis.
-    // We'll leave DB cleanup to `logoutAll` or when tokens expire/are rotated.
+    // Delete the refresh token from the DB if it was provided
+    if (refreshTokenString) {
+      try {
+        const tokenHash = crypto.createHash('sha256').update(refreshTokenString).digest('hex');
+        await this.prismaService.refreshToken.deleteMany({
+          where: { tokenHash, userId }
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to delete refresh token from DB during logout for user ${userId}: ${error.message}`);
+      }
+    }
 
     this.logger.log(`Session ${sessionId} logged out for user ${userId}`);
 
