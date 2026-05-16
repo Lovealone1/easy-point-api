@@ -8,7 +8,6 @@ import { RedisCacheService } from '../../infraestructure/redis/redis-cache.servi
 import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { GenerateOtpDto } from './dto/generate-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
-import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.template.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { AuditService } from '../../infraestructure/audit/audit.service.js';
@@ -249,7 +248,7 @@ export class AuthService {
     // In verifyOtp we currently only return accessToken (stateless).
     // We need to replace that with the stateful token generation.
     const user = await this.prismaService.user.findUnique({ where: { email: payload.email } });
-    const { accessToken } = await this.generateAuthTokens(user!.id, user!.email, user!.globalRole!, metadata);
+    const { accessToken, refreshToken } = await this.generateAuthTokens(user!.id, user!.email, user!.globalRole!, metadata);
 
     // Audit: successful login
     this.auditService.log({
@@ -268,17 +267,18 @@ export class AuthService {
     return {
       ...result,
       accessToken,
+      refreshToken,
     };
   }
 
-  async refreshToken(payload: RefreshTokenDto) {
+  async refreshToken(refreshTokenString: string) {
     try {
-      const decoded = await this.jwtService.verifyAsync(payload.refreshToken, {
+      const decoded = await this.jwtService.verifyAsync(refreshTokenString, {
         secret: this.config.jwt.refreshSecret,
       });
 
       // Compute deterministic hash of the provided refresh token
-      const tokenHash = crypto.createHash('sha256').update(payload.refreshToken).digest('hex');
+      const tokenHash = crypto.createHash('sha256').update(refreshTokenString).digest('hex');
 
       // Verify token exists in the database and belongs to the user
       const storedToken = await this.prismaService.refreshToken.findUnique({
@@ -430,8 +430,8 @@ export class AuthService {
       userAgent: metadata.userAgent
     };
 
-    // Set TTL to 7 days (matching refresh token)
-    const ttlSeconds = 7 * 24 * 60 * 60;
+    // Set TTL to match the refresh token configuration
+    const ttlSeconds = Math.floor(this.config.jwt.refreshExpiresInMs / 1000);
     const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
 
     const sessionData: SessionMetadata = {
