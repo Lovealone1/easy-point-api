@@ -105,9 +105,15 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiTags('Auth')
   @ApiOperation({ summary: 'Logout', description: 'Invalidates the current session token.' })
-  async logout(@CurrentUser('sub') userId: string, @CurrentUser('sid') sessionId: string, @Res({ passthrough: true }) response: Response) {
+  async logout(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('sid') sessionId: string,
+    @Res({ passthrough: true }) response: Response,
+    @Req() request: Request
+  ) {
     this.clearAuthCookies(response);
-    return this.authService.logout(userId, sessionId);
+    const refreshToken = request.cookies?.refresh_token;
+    return this.authService.logout(userId, sessionId, refreshToken);
   }
 
   @Post('logout-all')
