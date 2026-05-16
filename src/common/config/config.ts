@@ -64,6 +64,7 @@ interface AppConfigShape {
     expiresIn: string;
     refreshSecret: string;
     refreshExpiresIn: string;
+    refreshExpiresInMs: number;
   };
   s3: {
     endpoint: string;
@@ -210,9 +211,10 @@ export default registerAs('app', (): AppConfig => ({
   },
   jwt: {
     secret: getString('JWT_SECRET', 'fallback_secreto_desarrollo_temporal'),
-    expiresIn: getString('JWT_EXPIRES_IN', '7d'),
+    expiresIn: getString('JWT_EXPIRES_IN', '15m'),
     refreshSecret: getString('JWT_REFRESH_SECRET', 'fallback_refresh_secreto_7X'),
     refreshExpiresIn: getString('JWT_REFRESH_EXPIRES_IN', '30d'),
+    refreshExpiresInMs: getDurationMs('JWT_REFRESH_EXPIRES_IN', 30 * 24 * 60 * 60 * 1000),
   },
   s3: {
     endpoint: getString('S3_ENDPOINT'),
