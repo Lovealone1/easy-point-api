@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import type { ConfigType } from '@nestjs/config';
 import Redis from 'ioredis';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 import { AppLogger } from './common/logger/app.logger.js';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
@@ -22,6 +23,7 @@ async function bootstrap() {
   app.useLogger(appLogger);
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.use(helmet());
+  app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
