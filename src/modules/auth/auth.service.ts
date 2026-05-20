@@ -311,6 +311,14 @@ export class AuthService {
       // Revoke the old refresh token (Rotation)
       await this.prismaService.refreshToken.delete({ where: { id: storedToken.id } });
 
+      // Revoke old session from Redis during rotation to prevent memory leak and session list pollution
+      if (decoded.sid) {
+        await Promise.all([
+          this.redisCacheService.delete(`session_metadata:${user.id}:${decoded.sid}`),
+          this.redisCacheService.srem(`user_sessions:${user.id}`, decoded.sid),
+        ]);
+      }
+
       return {
         message: 'Tokens refreshed successfully',
         ...tokens,
