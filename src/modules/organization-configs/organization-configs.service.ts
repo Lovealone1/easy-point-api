@@ -12,6 +12,19 @@ export class OrganizationConfigsService {
     private readonly storageService: StorageService,
   ) {}
 
+  private async resolveLogo(
+    config: OrganizationConfigEntity,
+  ): Promise<OrganizationConfigEntity> {
+    if (config && config.logoUrl) {
+      try {
+        config.logoUrl = await this.storageService.getPresignedUrl(config.logoUrl);
+      } catch (error) {
+        console.error('Failed to generate presigned URL for logo:', error);
+      }
+    }
+    return config;
+  }
+
   async getConfig(): Promise<OrganizationConfigEntity> {
     const organizationId = getTenantId();
     if (!organizationId) {
@@ -27,7 +40,7 @@ export class OrganizationConfigsService {
       config = await this.configRepository.upsert(organizationId, {});
     }
 
-    return config;
+    return this.resolveLogo(config);
   }
 
   async updateConfig(
@@ -38,7 +51,8 @@ export class OrganizationConfigsService {
       throw new BadRequestException('Missing x-organization-id header');
     }
 
-    return this.configRepository.upsert(organizationId, dto);
+    const config = await this.configRepository.upsert(organizationId, dto);
+    return this.resolveLogo(config);
   }
 
   async uploadLogo(
@@ -53,17 +67,18 @@ export class OrganizationConfigsService {
       throw new BadRequestException('No file provided');
     }
 
-    const currentConfig = await this.getConfig();
-
     // Validations: PNG or SVG
     if (file.mimetype !== 'image/png' && file.mimetype !== 'image/svg+xml') {
       throw new BadRequestException('Only PNG or SVG files are allowed');
     }
 
+    const rawConfig = await this.configRepository.findByOrganizationId(organizationId);
+    const currentLogoUrl = rawConfig?.logoUrl;
+
     // Cap at 1 logo: Delete existing logo from S3 if it exists
-    if (currentConfig.logoUrl) {
+    if (currentLogoUrl) {
       try {
-        await this.storageService.deleteFile(currentConfig.logoUrl);
+        await this.storageService.deleteFile(currentLogoUrl);
       } catch (error) {
         // Log error but continue upload to ensure state is eventually consistent
         console.error('Failed to delete old logo from S3:', error);
@@ -75,10 +90,15 @@ export class OrganizationConfigsService {
     const timestamp = new Date().getTime();
     const fileName = `logos/org_${organizationId}_${timestamp}.${fileExtension}`;
 
-    await this.storageService.uploadFile(file.buffer, fileName, file.mimetype);
+    // Workaround: Supabase Storage S3 compatibility may throw "InvalidMimeType" for "image/svg+xml"
+    // during upload. We upload it as "image/png" to bypass the bucket restriction, and then
+    // override the ResponseContentType to "image/svg+xml" in StorageService.getPresignedUrl when retrieving.
+    const uploadMimetype = file.mimetype === 'image/svg+xml' ? 'image/png' : file.mimetype;
+    await this.storageService.uploadFile(file.buffer, fileName, uploadMimetype);
 
     // Save URL to config
-    return this.configRepository.upsert(organizationId, { logoUrl: fileName });
+    const config = await this.configRepository.upsert(organizationId, { logoUrl: fileName });
+    return this.resolveLogo(config);
   }
 
   async deleteLogo(): Promise<OrganizationConfigEntity> {
@@ -87,18 +107,24 @@ export class OrganizationConfigsService {
       throw new BadRequestException('Missing x-organization-id header');
     }
 
-    const currentConfig = await this.getConfig();
+    const rawConfig = await this.configRepository.findByOrganizationId(organizationId);
+    const currentLogoUrl = rawConfig?.logoUrl;
 
-    if (currentConfig.logoUrl) {
+    if (currentLogoUrl) {
       try {
-        await this.storageService.deleteFile(currentConfig.logoUrl);
+        await this.storageService.deleteFile(currentLogoUrl);
       } catch (error) {
         console.error('Failed to delete logo from S3:', error);
       }
 
-      return this.configRepository.upsert(organizationId, { logoUrl: null });
+      const config = await this.configRepository.upsert(organizationId, { logoUrl: null });
+      return this.resolveLogo(config);
     }
 
-    return currentConfig;
+    let config = rawConfig;
+    if (!config) {
+      config = await this.configRepository.upsert(organizationId, {});
+    }
+    return this.resolveLogo(config);
   }
 }

@@ -15,6 +15,7 @@ import { AuditAction } from '../../infraestructure/audit/enums/audit-action.enum
 import { AuditSeverity } from '../../infraestructure/audit/enums/audit-severity.enum.js';
 import crypto from 'crypto';
 import * as argon2 from 'argon2';
+import { StorageService } from '../../infraestructure/storage/storage.service.js';
 
 export interface SessionMetadata {
   sid: string;
@@ -42,6 +43,7 @@ export class AuthService {
     private readonly prismaService: PrismaService,
     private readonly invitationsService: InvitationsService,
     private readonly auditService: AuditService,
+    private readonly storageService: StorageService,
   ) { }
 
   async generateOtp(payload: GenerateOtpDto, isDevMode: boolean = false) {
@@ -523,5 +525,64 @@ export class AuthService {
     const html = getOtpEmailTemplate(otp, intent);
 
     return this.mailService.sendMail(email, subject, html);
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      include: {
+        organizations: {
+          include: {
+            organization: {
+              include: {
+                config: true,
+              },
+            },
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Resolve logoUrls to presigned URLs if logoUrl is present
+    const organizations = await Promise.all(
+      user.organizations.map(async (orgUser) => {
+        let logoUrl = orgUser.organization.config?.logoUrl || null;
+        if (logoUrl) {
+          try {
+            logoUrl = await this.storageService.getPresignedUrl(logoUrl);
+          } catch (error) {
+            this.logger.error(`Failed to generate presigned URL for logo in organization ${orgUser.organization.id}`, error);
+          }
+        }
+
+        return {
+          id: orgUser.organization.id,
+          name: orgUser.organization.name,
+          slug: orgUser.organization.slug,
+          role: orgUser.role.name,
+          config: orgUser.organization.config
+            ? {
+                ...orgUser.organization.config,
+                logoUrl,
+              }
+            : null,
+        };
+      })
+    );
+
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phoneNumber: user.phoneNumber,
+      globalRole: user.globalRole,
+      organizations,
+    };
   }
 }
