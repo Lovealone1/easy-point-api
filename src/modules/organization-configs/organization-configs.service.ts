@@ -24,6 +24,13 @@ export class OrganizationConfigsService {
         console.error('Failed to generate presigned URL for logo:', error);
       }
     }
+    if (config && config.logoShortUrl) {
+      try {
+        config.logoShortUrl = await this.storageService.getPresignedUrl(config.logoShortUrl);
+      } catch (error) {
+        console.error('Failed to generate presigned URL for short logo:', error);
+      }
+    }
     return config;
   }
 
@@ -158,6 +165,99 @@ export class OrganizationConfigsService {
       }
 
       const config = await this.configRepository.upsert(organizationId, { logoUrl: null });
+      
+      // Invalidate cache
+      try {
+        await this.redisCacheService.delete(`org_config:${organizationId}`);
+      } catch (error) {
+        console.error('Failed to delete organization config cache:', error);
+      }
+
+      return this.resolveLogo(config);
+    }
+
+    let config = rawConfig;
+    if (!config) {
+      config = await this.configRepository.upsert(organizationId, {});
+    }
+
+    // Invalidate cache
+    try {
+      await this.redisCacheService.delete(`org_config:${organizationId}`);
+    } catch (error) {
+      console.error('Failed to delete organization config cache:', error);
+    }
+
+    return this.resolveLogo(config);
+  }
+
+  async uploadLogoShort(
+    file: Express.Multer.File,
+  ): Promise<OrganizationConfigEntity> {
+    const organizationId = getTenantId();
+    if (!organizationId) {
+      throw new BadRequestException('Missing x-organization-id header');
+    }
+
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validations: PNG or SVG
+    if (file.mimetype !== 'image/png' && file.mimetype !== 'image/svg+xml') {
+      throw new BadRequestException('Only PNG or SVG files are allowed');
+    }
+
+    const rawConfig = await this.configRepository.findByOrganizationId(organizationId);
+    const currentLogoShortUrl = rawConfig?.logoShortUrl;
+
+    // Cap at 1 logo: Delete existing logo from S3 if it exists
+    if (currentLogoShortUrl) {
+      try {
+        await this.storageService.deleteFile(currentLogoShortUrl);
+      } catch (error) {
+        console.error('Failed to delete old short logo from S3:', error);
+      }
+    }
+
+    // Upload new logo
+    const fileExtension = file.mimetype === 'image/png' ? 'png' : 'svg';
+    const timestamp = new Date().getTime();
+    const fileName = `logos/org_${organizationId}_short_${timestamp}.${fileExtension}`;
+
+    const uploadMimetype = file.mimetype === 'image/svg+xml' ? 'image/png' : file.mimetype;
+    await this.storageService.uploadFile(file.buffer, fileName, uploadMimetype);
+
+    // Save URL to config
+    const config = await this.configRepository.upsert(organizationId, { logoShortUrl: fileName });
+    
+    // Invalidate cache
+    try {
+      await this.redisCacheService.delete(`org_config:${organizationId}`);
+    } catch (error) {
+      console.error('Failed to delete organization config cache:', error);
+    }
+
+    return this.resolveLogo(config);
+  }
+
+  async deleteLogoShort(): Promise<OrganizationConfigEntity> {
+    const organizationId = getTenantId();
+    if (!organizationId) {
+      throw new BadRequestException('Missing x-organization-id header');
+    }
+
+    const rawConfig = await this.configRepository.findByOrganizationId(organizationId);
+    const currentLogoShortUrl = rawConfig?.logoShortUrl;
+
+    if (currentLogoShortUrl) {
+      try {
+        await this.storageService.deleteFile(currentLogoShortUrl);
+      } catch (error) {
+        console.error('Failed to delete short logo from S3:', error);
+      }
+
+      const config = await this.configRepository.upsert(organizationId, { logoShortUrl: null });
       
       // Invalidate cache
       try {

@@ -5,6 +5,7 @@ export class OrganizationConfigEntity {
   readonly organizationId: string;
   
   logoUrl: string | null;
+  logoShortUrl: string | null;
   primaryColor: string | null;
   defaultTheme: Theme;
   
@@ -31,6 +32,7 @@ export class OrganizationConfigEntity {
     id: string;
     organizationId: string;
     logoUrl: string | null;
+    logoShortUrl: string | null;
     primaryColor: string | null;
     defaultTheme: Theme;
     timezone: string;
@@ -52,6 +54,7 @@ export class OrganizationConfigEntity {
     this.id = params.id;
     this.organizationId = params.organizationId;
     this.logoUrl = params.logoUrl;
+    this.logoShortUrl = params.logoShortUrl;
     this.primaryColor = params.primaryColor;
     this.defaultTheme = params.defaultTheme;
     this.timezone = params.timezone;
@@ -76,6 +79,7 @@ export class OrganizationConfigEntity {
       id: raw.id,
       organizationId: raw.organizationId,
       logoUrl: raw.logoUrl,
+      logoShortUrl: raw.logoShortUrl,
       primaryColor: raw.primaryColor,
       defaultTheme: raw.defaultTheme,
       timezone: raw.timezone,
