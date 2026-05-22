@@ -37,9 +37,9 @@ export class OrganizationConfigsController {
 
   @Get()
   @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR, Role.USER)
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'Get organization config (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Get organization config (Any Org Role)' })
   @ApiOkResponse({ description: 'Configuration retrieved.' })
   getConfig() {
     return this.configsService.getConfig();

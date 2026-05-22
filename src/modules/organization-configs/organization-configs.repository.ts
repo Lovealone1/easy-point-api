@@ -10,6 +10,7 @@ export class OrganizationConfigsRepository {
   async findByOrganizationId(organizationId: string): Promise<OrganizationConfigEntity | null> {
     const raw = await this.prisma.organizationConfig.findUnique({
       where: { organizationId },
+      include: { organization: true },
     });
     return raw ? OrganizationConfigEntity.fromPrisma(raw) : null;
   }
@@ -35,6 +36,7 @@ export class OrganizationConfigsRepository {
         phone: data.phone as string | null,
         receiptFooter: data.receiptFooter as string | null,
       },
+      include: { organization: true },
     });
     return OrganizationConfigEntity.fromPrisma(raw);
   }

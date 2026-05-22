@@ -41,6 +41,7 @@ describe('AuthService', () => {
             smembers: jest.fn(),
             sadd: jest.fn(),
             srem: jest.fn(),
+            mget: jest.fn(),
           },
         },
         {
@@ -141,6 +142,64 @@ describe('AuthService', () => {
         'test@test.com',
         'invite-123'
       );
+    });
+  });
+
+  describe('refreshToken', () => {
+    it('should successfully rotate tokens if session is active', async () => {
+      const decodedPayload = { sub: 'user-1', email: 'test@test.com', role: 'USER', sid: 'session-123', ip: '127.0.0.1', userAgent: 'agent' };
+      jwtService.verifyAsync.mockResolvedValueOnce(decodedPayload);
+      
+      prismaService.refreshToken.findUnique.mockResolvedValueOnce({
+        id: 'token-id-123',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 100000),
+        user: { id: 'user-1', email: 'test@test.com', isActive: true, globalRole: 'USER' }
+      });
+
+      redisCacheService.get.mockResolvedValueOnce('active-session-metadata');
+      
+      jwtService.signAsync.mockResolvedValueOnce('new-access-token');
+      jwtService.signAsync.mockResolvedValueOnce('new-refresh-token');
+
+      const result = await service.refreshToken('old-refresh-token');
+
+      expect(redisCacheService.get).toHaveBeenCalledWith('session_metadata:user-1:session-123');
+      expect(prismaService.refreshToken.delete).toHaveBeenCalledWith({ where: { id: 'token-id-123' } });
+      expect(result.accessToken).toBe('new-access-token');
+    });
+
+    it('should throw UnauthorizedException if session is revoked/inactive in Redis', async () => {
+      const decodedPayload = { sub: 'user-1', email: 'test@test.com', role: 'USER', sid: 'session-123', ip: '127.0.0.1', userAgent: 'agent' };
+      jwtService.verifyAsync.mockResolvedValueOnce(decodedPayload);
+      
+      prismaService.refreshToken.findUnique.mockResolvedValueOnce({
+        id: 'token-id-123',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 100000),
+        user: { id: 'user-1', email: 'test@test.com', isActive: true, globalRole: 'USER' }
+      });
+
+      redisCacheService.get.mockResolvedValueOnce(null); // Revoked/Inactive session
+
+      await expect(service.refreshToken('old-refresh-token')).rejects.toThrow(UnauthorizedException);
+      expect(prismaService.refreshToken.delete).toHaveBeenCalledWith({ where: { id: 'token-id-123' } });
+    });
+  });
+
+  describe('getSessions', () => {
+    it('should return active sessions and clean up expired ones', async () => {
+      redisCacheService.smembers.mockResolvedValueOnce(['session-active', 'session-expired']);
+      redisCacheService.mget.mockResolvedValueOnce([
+        { sid: 'session-active', createdAt: '2026-05-20T10:00:00Z', expiresAt: 9999999 },
+        null // Expired session
+      ]);
+
+      const result = await service.getSessions('user-1');
+
+      expect(redisCacheService.srem).toHaveBeenCalledWith('user_sessions:user-1', 'session-expired');
+      expect(result).toHaveLength(1);
+      expect(result[0].sid).toBe('session-active');
     });
   });
 });
