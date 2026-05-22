@@ -4,12 +4,14 @@ import { UpdateOrganizationConfigDto } from './dto/update-organization-config.dt
 import { getTenantId } from '../../common/context/tenant.context.js';
 import { OrganizationConfigEntity } from './domain/organization-config.entity.js';
 import { StorageService } from '../../infraestructure/storage/storage.service.js';
+import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
 
 @Injectable()
 export class OrganizationConfigsService {
   constructor(
     private readonly configRepository: OrganizationConfigsRepository,
     private readonly storageService: StorageService,
+    private readonly redisCacheService: RedisCacheService,
   ) {}
 
   private async resolveLogo(
@@ -31,6 +33,22 @@ export class OrganizationConfigsService {
       throw new BadRequestException('Missing x-organization-id header');
     }
 
+    const cacheKey = `org_config:${organizationId}`;
+    try {
+      const cached = await this.redisCacheService.get<any>(cacheKey);
+      if (cached) {
+        cached.createdAt = new Date(cached.createdAt);
+        cached.updatedAt = new Date(cached.updatedAt);
+        if (cached.planActiveUntil) {
+          cached.planActiveUntil = new Date(cached.planActiveUntil);
+        }
+        const entity = new OrganizationConfigEntity(cached);
+        return this.resolveLogo(entity);
+      }
+    } catch (error) {
+      console.error('Failed to fetch organization config cache:', error);
+    }
+
     let config = await this.configRepository.findByOrganizationId(
       organizationId,
     );
@@ -38,6 +56,12 @@ export class OrganizationConfigsService {
     // If config doesn't exist, upsert an empty/default one and return
     if (!config) {
       config = await this.configRepository.upsert(organizationId, {});
+    }
+
+    try {
+      await this.redisCacheService.set(cacheKey, config);
+    } catch (error) {
+      console.error('Failed to set organization config cache:', error);
     }
 
     return this.resolveLogo(config);
@@ -52,6 +76,14 @@ export class OrganizationConfigsService {
     }
 
     const config = await this.configRepository.upsert(organizationId, dto);
+    
+    // Invalidate cache
+    try {
+      await this.redisCacheService.delete(`org_config:${organizationId}`);
+    } catch (error) {
+      console.error('Failed to delete organization config cache:', error);
+    }
+
     return this.resolveLogo(config);
   }
 
@@ -98,6 +130,14 @@ export class OrganizationConfigsService {
 
     // Save URL to config
     const config = await this.configRepository.upsert(organizationId, { logoUrl: fileName });
+    
+    // Invalidate cache
+    try {
+      await this.redisCacheService.delete(`org_config:${organizationId}`);
+    } catch (error) {
+      console.error('Failed to delete organization config cache:', error);
+    }
+
     return this.resolveLogo(config);
   }
 
@@ -118,6 +158,14 @@ export class OrganizationConfigsService {
       }
 
       const config = await this.configRepository.upsert(organizationId, { logoUrl: null });
+      
+      // Invalidate cache
+      try {
+        await this.redisCacheService.delete(`org_config:${organizationId}`);
+      } catch (error) {
+        console.error('Failed to delete organization config cache:', error);
+      }
+
       return this.resolveLogo(config);
     }
 
@@ -125,6 +173,14 @@ export class OrganizationConfigsService {
     if (!config) {
       config = await this.configRepository.upsert(organizationId, {});
     }
+
+    // Invalidate cache
+    try {
+      await this.redisCacheService.delete(`org_config:${organizationId}`);
+    } catch (error) {
+      console.error('Failed to delete organization config cache:', error);
+    }
+
     return this.resolveLogo(config);
   }
 }

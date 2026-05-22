@@ -1,4 +1,4 @@
-import { Theme } from '@prisma/client';
+import { Theme, Plan } from '@prisma/client';
 
 export class OrganizationConfigEntity {
   readonly id: string;
@@ -17,6 +17,12 @@ export class OrganizationConfigEntity {
   address: string | null;
   phone: string | null;
   receiptFooter: string | null;
+
+  readonly organizationName: string;
+  readonly organizationEmail: string | null;
+  readonly plan: Plan;
+  readonly planActiveUntil: Date | null;
+  readonly organizationIsActive: boolean;
 
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -37,6 +43,11 @@ export class OrganizationConfigEntity {
     receiptFooter: string | null;
     createdAt: Date;
     updatedAt: Date;
+    organizationName: string;
+    organizationEmail: string | null;
+    plan: Plan;
+    planActiveUntil: Date | null;
+    organizationIsActive: boolean;
   }) {
     this.id = params.id;
     this.organizationId = params.organizationId;
@@ -53,25 +64,14 @@ export class OrganizationConfigEntity {
     this.receiptFooter = params.receiptFooter;
     this.createdAt = params.createdAt;
     this.updatedAt = params.updatedAt;
+    this.organizationName = params.organizationName;
+    this.organizationEmail = params.organizationEmail;
+    this.plan = params.plan;
+    this.planActiveUntil = params.planActiveUntil;
+    this.organizationIsActive = params.organizationIsActive;
   }
 
-  static fromPrisma(raw: {
-    id: string;
-    organizationId: string;
-    logoUrl: string | null;
-    primaryColor: string | null;
-    defaultTheme: Theme;
-    timezone: string;
-    currency: string;
-    language: string;
-    dateFormat: string;
-    taxId: string | null;
-    address: string | null;
-    phone: string | null;
-    receiptFooter: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-  }): OrganizationConfigEntity {
+  static fromPrisma(raw: any): OrganizationConfigEntity {
     return new OrganizationConfigEntity({
       id: raw.id,
       organizationId: raw.organizationId,
@@ -88,6 +88,11 @@ export class OrganizationConfigEntity {
       receiptFooter: raw.receiptFooter,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
+      organizationName: raw.organization?.name || '',
+      organizationEmail: raw.organization?.email || null,
+      plan: raw.organization?.plan || Plan.FREE,
+      planActiveUntil: raw.organization?.planActiveUntil || null,
+      organizationIsActive: raw.organization?.isActive ?? true,
     });
   }
 }

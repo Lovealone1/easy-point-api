@@ -569,6 +569,13 @@ export class AuthService {
             ? {
                 ...orgUser.organization.config,
                 logoUrl,
+                // Enrich with organization-level fields that the frontend
+                // OrganizationConfig type expects but are not on the config row.
+                organizationName: orgUser.organization.name,
+                organizationEmail: orgUser.organization.email ?? null,
+                plan: orgUser.organization.plan,
+                planActiveUntil: orgUser.organization.planActiveUntil ?? null,
+                organizationIsActive: orgUser.organization.isActive,
               }
             : null,
         };
