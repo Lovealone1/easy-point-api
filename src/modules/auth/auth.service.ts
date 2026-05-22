@@ -296,6 +296,17 @@ export class AuthService {
         throw new UnauthorizedException('Refresh token has expired');
       }
 
+      // Verify session exists in Redis and has not been killed/revoked
+      if (decoded.sid) {
+        const sessionKey = `session_metadata:${decoded.sub}:${decoded.sid}`;
+        const isSessionActive = await this.redisCacheService.get(sessionKey);
+        if (!isSessionActive) {
+          // Clean up the DB token since the session is killed
+          await this.prismaService.refreshToken.delete({ where: { id: storedToken.id } }).catch(() => {});
+          throw new UnauthorizedException('Session has been revoked or expired');
+        }
+      }
+
       const user = storedToken.user;
 
       if (!user || !user.isActive) {
@@ -323,7 +334,10 @@ export class AuthService {
         message: 'Tokens refreshed successfully',
         ...tokens,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
   }
@@ -338,9 +352,23 @@ export class AuthService {
     const sessions = await this.redisCacheService.mget<SessionMetadata>(keys);
 
     // Filter out expired/null sessions and sort by creation
-    return sessions
-      .filter((s): s is SessionMetadata => s !== null)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const expiredSids: string[] = [];
+    const activeSessions = sessions.filter((s, index) => {
+      if (s === null) {
+        expiredSids.push(sessionIds[index]);
+        return false;
+      }
+      return true;
+    }) as SessionMetadata[];
+
+    if (expiredSids.length > 0) {
+      // Clean up dead session IDs from the user's sessions set in Redis
+      await Promise.all(
+        expiredSids.map(sid => this.redisCacheService.srem(`user_sessions:${userId}`, sid))
+      ).catch(err => this.logger.warn(`Failed to clean expired sessions: ${err.message}`));
+    }
+
+    return activeSessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   async logout(userId: string, sessionId: string, refreshTokenString?: string) {
