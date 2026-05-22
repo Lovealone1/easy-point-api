@@ -91,6 +91,16 @@ export class AuthController {
     return rest;
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiTags('Auth')
+  @ApiOperation({ summary: 'Get current user profile', description: 'Returns the logged-in user profile along with joined organizations and visual branding configs.' })
+  @ApiOkResponse({ description: 'Profile retrieved successfully.' })
+  async getProfile(@CurrentUser('sub') userId: string) {
+    return this.authService.getProfile(userId);
+  }
+
   @Get('sessions')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

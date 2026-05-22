@@ -79,11 +79,16 @@ export class StorageService {
   async getPresignedUrl(
     fileName: string,
     expiresInSeconds: number = 3600,
+    responseContentType?: string,
   ): Promise<string> {
     try {
+      const isSvg = fileName.toLowerCase().endsWith('.svg');
+      const resolvedContentType = responseContentType || (isSvg ? 'image/svg+xml' : undefined);
+
       const command = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,
+        ...(resolvedContentType ? { ResponseContentType: resolvedContentType } : {}),
       });
 
       const url = await getSignedUrl(this.s3Client, command, {

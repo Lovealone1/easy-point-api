@@ -8,6 +8,7 @@ import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { Prisma, Plan } from '@prisma/client';
 import { OrganizationsRepository } from './organizations.repository.js';
 import { OrganizationEntity } from './domain/organization.entity.js';
+import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
 
 /**
  * Service de Organization — capa de aplicación (orquestación).
@@ -25,6 +26,7 @@ import { OrganizationEntity } from './domain/organization.entity.js';
 export class OrganizationsService {
   constructor(
     private readonly organizationsRepository: OrganizationsRepository,
+    private readonly redisCacheService: RedisCacheService,
   ) {}
 
   async create(
@@ -102,7 +104,16 @@ export class OrganizationsService {
     updateOrganizationDto: UpdateOrganizationDto,
   ): Promise<OrganizationEntity> {
     await this.findOne(id);
-    return this.organizationsRepository.update(id, updateOrganizationDto);
+    const updated = await this.organizationsRepository.update(id, updateOrganizationDto);
+    
+    // Invalidate config cache
+    try {
+      await this.redisCacheService.delete(`org_config:${id}`);
+    } catch (error) {
+      console.error('Failed to invalidate organization config cache:', error);
+    }
+    
+    return updated;
   }
 
   async updatePlan(
@@ -119,14 +130,32 @@ export class OrganizationsService {
 
     org.applyPlanChange(newPlan, newActiveUntil);
 
-    return this.organizationsRepository.update(id, {
+    const updated = await this.organizationsRepository.update(id, {
       plan: org.plan,
       planActiveUntil: org.planActiveUntil,
     });
+
+    // Invalidate config cache
+    try {
+      await this.redisCacheService.delete(`org_config:${id}`);
+    } catch (error) {
+      console.error('Failed to invalidate organization config cache:', error);
+    }
+
+    return updated;
   }
 
   async remove(id: string): Promise<OrganizationEntity> {
     await this.findOne(id);
-    return this.organizationsRepository.delete(id);
+    const deleted = await this.organizationsRepository.delete(id);
+
+    // Invalidate config cache
+    try {
+      await this.redisCacheService.delete(`org_config:${id}`);
+    } catch (error) {
+      console.error('Failed to invalidate organization config cache:', error);
+    }
+
+    return deleted;
   }
 }

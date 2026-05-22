@@ -15,6 +15,7 @@ import { AuditAction } from '../../infraestructure/audit/enums/audit-action.enum
 import { AuditSeverity } from '../../infraestructure/audit/enums/audit-severity.enum.js';
 import crypto from 'crypto';
 import * as argon2 from 'argon2';
+import { StorageService } from '../../infraestructure/storage/storage.service.js';
 
 export interface SessionMetadata {
   sid: string;
@@ -42,6 +43,7 @@ export class AuthService {
     private readonly prismaService: PrismaService,
     private readonly invitationsService: InvitationsService,
     private readonly auditService: AuditService,
+    private readonly storageService: StorageService,
   ) { }
 
   async generateOtp(payload: GenerateOtpDto, isDevMode: boolean = false) {
@@ -296,6 +298,17 @@ export class AuthService {
         throw new UnauthorizedException('Refresh token has expired');
       }
 
+      // Verify session exists in Redis and has not been killed/revoked
+      if (decoded.sid) {
+        const sessionKey = `session_metadata:${decoded.sub}:${decoded.sid}`;
+        const isSessionActive = await this.redisCacheService.get(sessionKey);
+        if (!isSessionActive) {
+          // Clean up the DB token since the session is killed
+          await this.prismaService.refreshToken.delete({ where: { id: storedToken.id } }).catch(() => {});
+          throw new UnauthorizedException('Session has been revoked or expired');
+        }
+      }
+
       const user = storedToken.user;
 
       if (!user || !user.isActive) {
@@ -323,7 +336,10 @@ export class AuthService {
         message: 'Tokens refreshed successfully',
         ...tokens,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
   }
@@ -338,9 +354,23 @@ export class AuthService {
     const sessions = await this.redisCacheService.mget<SessionMetadata>(keys);
 
     // Filter out expired/null sessions and sort by creation
-    return sessions
-      .filter((s): s is SessionMetadata => s !== null)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const expiredSids: string[] = [];
+    const activeSessions = sessions.filter((s, index) => {
+      if (s === null) {
+        expiredSids.push(sessionIds[index]);
+        return false;
+      }
+      return true;
+    }) as SessionMetadata[];
+
+    if (expiredSids.length > 0) {
+      // Clean up dead session IDs from the user's sessions set in Redis
+      await Promise.all(
+        expiredSids.map(sid => this.redisCacheService.srem(`user_sessions:${userId}`, sid))
+      ).catch(err => this.logger.warn(`Failed to clean expired sessions: ${err.message}`));
+    }
+
+    return activeSessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   async logout(userId: string, sessionId: string, refreshTokenString?: string) {
@@ -495,5 +525,71 @@ export class AuthService {
     const html = getOtpEmailTemplate(otp, intent);
 
     return this.mailService.sendMail(email, subject, html);
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      include: {
+        organizations: {
+          include: {
+            organization: {
+              include: {
+                config: true,
+              },
+            },
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Resolve logoUrls to presigned URLs if logoUrl is present
+    const organizations = await Promise.all(
+      user.organizations.map(async (orgUser) => {
+        let logoUrl = orgUser.organization.config?.logoUrl || null;
+        if (logoUrl) {
+          try {
+            logoUrl = await this.storageService.getPresignedUrl(logoUrl);
+          } catch (error) {
+            this.logger.error(`Failed to generate presigned URL for logo in organization ${orgUser.organization.id}`, error);
+          }
+        }
+
+        return {
+          id: orgUser.organization.id,
+          name: orgUser.organization.name,
+          slug: orgUser.organization.slug,
+          role: orgUser.role.name,
+          config: orgUser.organization.config
+            ? {
+                ...orgUser.organization.config,
+                logoUrl,
+                // Enrich with organization-level fields that the frontend
+                // OrganizationConfig type expects but are not on the config row.
+                organizationName: orgUser.organization.name,
+                organizationEmail: orgUser.organization.email ?? null,
+                plan: orgUser.organization.plan,
+                planActiveUntil: orgUser.organization.planActiveUntil ?? null,
+                organizationIsActive: orgUser.organization.isActive,
+              }
+            : null,
+        };
+      })
+    );
+
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phoneNumber: user.phoneNumber,
+      globalRole: user.globalRole,
+      organizations,
+    };
   }
 }
