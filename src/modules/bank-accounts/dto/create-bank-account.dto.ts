@@ -22,4 +22,8 @@ export class CreateBankAccountDto {
   @IsOptional()
   @IsString()
   qrCode?: string;
+
+  @ApiPropertyOptional({ type: 'string', format: 'binary', description: 'Optional QR code image file' })
+  @IsOptional()
+  file?: any;
 }
