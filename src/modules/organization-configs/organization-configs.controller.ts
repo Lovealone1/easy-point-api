@@ -83,4 +83,31 @@ export class OrganizationConfigsController {
   deleteLogo() {
     return this.configsService.deleteLogo();
   }
+
+  @Post('logo-short')
+  @UseGuards(JwtAuthGuard, OrgRolesGuard)
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @ApiSecurity('x-organization-id')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Logo file (PNG or SVG)',
+    type: UploadLogoDto,
+  })
+  @ApiOperation({ summary: 'Upload organization short logo (Org Owner / Org Admin)' })
+  @ApiOkResponse({ description: 'Short logo uploaded and config updated.' })
+  uploadLogoShort(@UploadedFile() file: Express.Multer.File) {
+    return this.configsService.uploadLogoShort(file);
+  }
+
+  @Delete('logo-short')
+  @UseGuards(JwtAuthGuard, OrgRolesGuard)
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @ApiSecurity('x-organization-id')
+  @ApiOperation({ summary: 'Delete organization short logo (Org Owner / Org Admin)' })
+  @ApiOkResponse({ description: 'Short logo deleted and config updated.' })
+  deleteLogoShort() {
+    return this.configsService.deleteLogoShort();
+  }
 }

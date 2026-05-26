@@ -560,6 +560,15 @@ export class AuthService {
           }
         }
 
+        let logoShortUrl = orgUser.organization.config?.logoShortUrl || null;
+        if (logoShortUrl) {
+          try {
+            logoShortUrl = await this.storageService.getPresignedUrl(logoShortUrl);
+          } catch (error) {
+            this.logger.error(`Failed to generate presigned URL for short logo in organization ${orgUser.organization.id}`, error);
+          }
+        }
+
         return {
           id: orgUser.organization.id,
           name: orgUser.organization.name,
@@ -569,6 +578,7 @@ export class AuthService {
             ? {
                 ...orgUser.organization.config,
                 logoUrl,
+                logoShortUrl,
                 // Enrich with organization-level fields that the frontend
                 // OrganizationConfig type expects but are not on the config row.
                 organizationName: orgUser.organization.name,
