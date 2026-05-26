@@ -135,6 +135,7 @@ export class RecipesService {
         ingredients: [],
         steps: [],
         metadata: createRecipeDto.content.metadata,
+        icon: createRecipeDto.content.icon,
       },
       category: resolvedCategory,
       estimatedTime: createRecipeDto.estimatedTime ?? null,
@@ -225,6 +226,12 @@ export class RecipesService {
           current.content = {
             ...current.content,
             metadata: updateRecipeDto.content.metadata,
+          };
+        }
+        if (updateRecipeDto.content.icon !== undefined) {
+          current.content = {
+            ...current.content,
+            icon: updateRecipeDto.content.icon,
           };
         }
       } catch (err: unknown) {

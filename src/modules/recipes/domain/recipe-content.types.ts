@@ -35,4 +35,5 @@ export interface RecipeContent {
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   metadata: RecipeMetadata;
+  icon?: string;
 }
