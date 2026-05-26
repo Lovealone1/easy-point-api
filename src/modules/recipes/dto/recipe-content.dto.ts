@@ -83,4 +83,9 @@ export class RecipeContentDto {
   @ValidateNested()
   @Type(() => RecipeMetadataDto)
   metadata: RecipeMetadataDto;
+
+  @ApiPropertyOptional({ description: 'Icono representativo de la receta' })
+  @IsOptional()
+  @IsString()
+  icon?: string;
 }
