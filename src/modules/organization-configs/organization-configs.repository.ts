@@ -25,6 +25,7 @@ export class OrganizationConfigsRepository {
       create: {
         organizationId,
         logoUrl: data.logoUrl as string | null,
+        logoShortUrl: data.logoShortUrl as string | null,
         primaryColor: data.primaryColor as string | null,
         defaultTheme: data.defaultTheme as any,
         timezone: data.timezone as string,
