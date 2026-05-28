@@ -27,6 +27,12 @@ export class EmployeeEntity {
   isActive: boolean;
   notes: string | null;
   userId: string | null;
+  user?: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
   readonly createdAt: Date;
   readonly updatedAt: Date;
 
@@ -45,6 +51,12 @@ export class EmployeeEntity {
     isActive: boolean;
     notes: string | null;
     userId: string | null;
+    user?: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    };
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -62,6 +74,7 @@ export class EmployeeEntity {
     this.isActive = params.isActive;
     this.notes = params.notes;
     this.userId = params.userId;
+    this.user = params.user;
     this.createdAt = params.createdAt;
     this.updatedAt = params.updatedAt;
   }
@@ -134,6 +147,12 @@ export class EmployeeEntity {
     isActive: boolean;
     notes: string | null;
     userId: string | null;
+    user?: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    } | null;
     createdAt: Date;
     updatedAt: Date;
   }): EmployeeEntity {
@@ -152,6 +171,7 @@ export class EmployeeEntity {
       isActive: raw.isActive,
       notes: raw.notes,
       userId: raw.userId,
+      user: raw.user ?? undefined,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
     });
