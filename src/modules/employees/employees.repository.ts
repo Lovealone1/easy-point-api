@@ -19,7 +19,12 @@ export class EmployeesRepository {
   async create(
     data: Prisma.EmployeeUncheckedCreateInput,
   ): Promise<EmployeeEntity> {
-    const raw = await this.prisma.employee.create({ data });
+    const raw = await this.prisma.employee.create({
+      data,
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
     return EmployeeEntity.fromPrisma(raw);
   }
 
@@ -31,14 +36,27 @@ export class EmployeesRepository {
   }): Promise<[EmployeeEntity[], number]> {
     const { skip, take, where, orderBy } = params;
     const [rows, count] = await Promise.all([
-      this.prisma.employee.findMany({ skip, take, where, orderBy }),
+      this.prisma.employee.findMany({
+        skip,
+        take,
+        where,
+        orderBy,
+        include: {
+          user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      }),
       this.prisma.employee.count({ where }),
     ]);
     return [rows.map(EmployeeEntity.fromPrisma), count];
   }
 
   async findById(id: string): Promise<EmployeeEntity | null> {
-    const raw = await this.prisma.employee.findUnique({ where: { id } });
+    const raw = await this.prisma.employee.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
     return raw ? EmployeeEntity.fromPrisma(raw) : null;
   }
 
@@ -46,12 +64,23 @@ export class EmployeesRepository {
     id: string,
     data: Prisma.EmployeeUncheckedUpdateInput,
   ): Promise<EmployeeEntity> {
-    const raw = await this.prisma.employee.update({ where: { id }, data });
+    const raw = await this.prisma.employee.update({
+      where: { id },
+      data,
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
     return EmployeeEntity.fromPrisma(raw);
   }
 
   async delete(id: string): Promise<EmployeeEntity> {
-    const raw = await this.prisma.employee.delete({ where: { id } });
+    const raw = await this.prisma.employee.delete({
+      where: { id },
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
     return EmployeeEntity.fromPrisma(raw);
   }
 }
