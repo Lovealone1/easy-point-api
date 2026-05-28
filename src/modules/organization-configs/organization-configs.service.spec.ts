@@ -34,6 +34,11 @@ describe('OrganizationConfigsService', () => {
     address: null,
     phone: null,
     receiptFooter: null,
+    organizationName: 'Org Name',
+    organizationEmail: 'org@example.com',
+    plan: 'FREE' as any,
+    planActiveUntil: null,
+    organizationIsActive: true,
     createdAt: mockDate,
     updatedAt: mockDate,
   });
