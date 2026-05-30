@@ -252,7 +252,7 @@ export class SalesService {
           organizationId,
           bankAccountId: dto.bankAccountId,
           type: TransactionType.CREDIT,
-          amount: sale.totalAmount,
+          amount: new Prisma.Decimal(sale.totalAmount),
           operationType: OperationType.SALE,
           referenceId: sale.id,
           referenceType: 'Sale',
@@ -312,7 +312,7 @@ export class SalesService {
       await this.validateSufficientStock(dto.items, stockMap, tx);
 
       const additionalAmount = this.calcTotal(dto.items);
-      const newTotal = sale.totalAmount.plus(new Prisma.Decimal(additionalAmount));
+      const newTotal = new Prisma.Decimal(sale.totalAmount).plus(additionalAmount);
 
       await this.inventoryMovementsRepository.createMany(
         dto.items.map((item) => {
@@ -406,7 +406,7 @@ export class SalesService {
             organizationId,
             bankAccountId: originalTx.bankAccountId,
             type: TransactionType.DEBIT,
-            amount: sale.totalAmount,
+            amount: new Prisma.Decimal(sale.totalAmount),
             operationType: OperationType.REFUND,
             referenceId: sale.id,
             referenceType: 'Sale',
