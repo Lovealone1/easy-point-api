@@ -16,7 +16,7 @@ export class DiscountRulesRepository {
     skip?: number;
     take?: number;
     where?: Prisma.DiscountRuleWhereInput;
-    orderBy?: Prisma.DiscountRuleOrderByWithRelationInput;
+    orderBy?: Prisma.DiscountRuleOrderByWithRelationInput | Prisma.DiscountRuleOrderByWithRelationInput[];
   }): Promise<[DiscountRuleEntity[], number]> {
     const { skip, take, where, orderBy } = params;
     const [rows, count] = await Promise.all([
