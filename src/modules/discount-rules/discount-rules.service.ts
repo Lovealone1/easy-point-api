@@ -112,9 +112,10 @@ export class DiscountRulesService {
       where,
       skip: query.skip,
       take: query.limit,
-      orderBy: {
-        [query.orderBy]: query.order.toLowerCase() as Prisma.SortOrder,
-      },
+      orderBy: [
+        { isActive: 'desc' },
+        { [query.orderBy]: query.order.toLowerCase() as Prisma.SortOrder },
+      ],
     });
 
     const pageMetaDto = new PageMetaDto({
@@ -153,7 +154,17 @@ export class DiscountRulesService {
     id: string,
     dto: UpdateDiscountRuleDto,
   ): Promise<DiscountRuleEntity> {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+
+    if (dto.value !== undefined) {
+      const type = existing.type;
+      if (type === 'PERCENTAGE' && dto.value > 100) {
+        throw new BadRequestException('Para PERCENTAGE el valor máximo es 100');
+      }
+      if (dto.value < 0) {
+        throw new BadRequestException('El valor del descuento debe ser positivo');
+      }
+    }
 
     // If code changes, ensure it's unique in this org
     if (dto.code) {

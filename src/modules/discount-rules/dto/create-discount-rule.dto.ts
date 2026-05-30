@@ -9,10 +9,37 @@ import {
   IsDateString,
   IsUUID,
   Min,
-  Max,
+  registerDecorator,
+  ValidationOptions,
+  ValidationArguments,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DiscountType, DiscountScope, DiscountCategory } from '@prisma/client';
+
+export function IsDiscountValueValid(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      name: 'isDiscountValueValid',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: any, args: ValidationArguments) {
+          const object = args.object as any;
+          if (value === undefined || value === null) return false;
+          const numValue = Number(value);
+          if (isNaN(numValue)) return false;
+          if (numValue < 0) return false;
+          if (object.type === DiscountType.PERCENTAGE && numValue > 100) return false;
+          return true;
+        },
+        defaultMessage(args: ValidationArguments) {
+          return 'Para PERCENTAGE el valor máximo es 100. Para FIXED_AMOUNT use un monto positivo.';
+        },
+      },
+    });
+  };
+}
 
 export class CreateDiscountRuleDto {
   // organizationId proviene del header x-organization-id via TenantMiddleware
@@ -49,10 +76,7 @@ export class CreateDiscountRuleDto {
   })
   @IsNumber({ maxDecimalPlaces: 4 })
   @Type(() => Number)
-  @Min(0)
-  @Max(100, {
-    message: 'Para PERCENTAGE el valor máximo es 100. Para FIXED_AMOUNT use un monto positivo.',
-  })
+  @IsDiscountValueValid()
   value: number;
 
   @ApiProperty({
