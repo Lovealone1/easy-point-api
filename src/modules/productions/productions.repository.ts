@@ -3,7 +3,6 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '@prisma/client';
 import { ProductionEntity } from './domain/production.entity.js';
 
-//TODO: Testear módulo de producciones
 
 @Injectable()
 export class ProductionsRepository {
