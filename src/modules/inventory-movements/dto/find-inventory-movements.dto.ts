@@ -23,4 +23,14 @@ export class FindInventoryMovementsDto extends PageOptionsDto {
   @IsOptional()
   @IsEnum(MovementType)
   type?: MovementType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  saleId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  productionId?: string;
 }
