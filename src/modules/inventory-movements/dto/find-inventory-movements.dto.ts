@@ -33,4 +33,9 @@ export class FindInventoryMovementsDto extends PageOptionsDto {
   @IsOptional()
   @IsString()
   productionId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  productPurchaseId?: string;
 }
