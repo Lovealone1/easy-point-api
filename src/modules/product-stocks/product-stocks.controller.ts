@@ -1,9 +1,10 @@
 import {
-  Controller, Get, Post, Body, Param, UseGuards, Query, HttpCode, HttpStatus,
+  Controller, Get, Post, Body, Param, UseGuards, Query, HttpCode, HttpStatus, Patch,
 } from '@nestjs/common';
 import { ProductStocksService } from './product-stocks.service.js';
 import { CreateProductStockDto } from './dto/create-product-stock.dto.js';
 import { FindProductStocksDto } from './dto/find-product-stocks.dto.js';
+import { UpdateProductStockDto } from './dto/update-product-stock.dto.js';
 import {
   ApiTags, ApiOperation, ApiBearerAuth, ApiSecurity,
   ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiTooManyRequestsResponse,
@@ -66,5 +67,17 @@ export class ProductStocksController {
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
   findOne(@Param('id') id: string) {
     return this.productStocksService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, OrgRolesGuard)
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @ApiSecurity('x-organization-id')
+  @ApiOperation({ summary: 'Update product stock record' })
+  @ApiOkResponse({ description: 'Updated successfully.' })
+  @ApiNotFoundResponse({ description: 'Not found.' })
+  @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
+  update(@Param('id') id: string, @Body() updateProductStockDto: UpdateProductStockDto) {
+    return this.productStocksService.update(id, updateProductStockDto);
   }
 }
