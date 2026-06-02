@@ -333,6 +333,13 @@ export class ProductPurchasesService {
     if (query.supplierId) where.supplierId = query.supplierId;
     if (query.status) where.status = query.status;
 
+    if (query.search) {
+      where.OR = [
+        { notes: { contains: query.search, mode: 'insensitive' } },
+        { supplier: { name: { contains: query.search, mode: 'insensitive' } } },
+      ];
+    }
+
     const [items, count] = await this.productPurchasesRepository.findManyWithCount({
       where,
       skip: query.skip,

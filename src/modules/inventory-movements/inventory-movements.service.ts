@@ -33,6 +33,7 @@ export class InventoryMovementsService {
     if (query.type) where.type = query.type;
     if (query.saleId) where.saleId = query.saleId;
     if (query.productionId) where.productionId = query.productionId;
+    if (query.productPurchaseId) where.productPurchaseId = query.productPurchaseId;
 
     const [items, count] = await this.inventoryMovementsRepository.findManyWithCount({
       where,
