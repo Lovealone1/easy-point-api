@@ -69,9 +69,30 @@ export class ProductPurchasesService {
         tx,
       );
 
+      // Consolidate items if PENDING to prevent duplicate inventory movements
+      let itemsToProcess = dto.items;
+      if (status === PurchaseStatus.PENDING) {
+        const consolidated: CreateProductPurchaseItemDto[] = [];
+        for (const item of dto.items) {
+          const location = item.location || 'Principal';
+          const existing = consolidated.find(
+            (c) => c.productId === item.productId && (c.location || 'Principal') === location,
+          );
+          if (existing) {
+            existing.quantity += item.quantity;
+            if (item.unitCost != null) {
+              existing.unitCost = item.unitCost;
+            }
+          } else {
+            consolidated.push({ ...item });
+          }
+        }
+        itemsToProcess = consolidated;
+      }
+
       // 3 — Bulk insert inventory movements
       await this.inventoryMovementsRepository.createMany(
-        dto.items.map((item) => {
+        itemsToProcess.map((item) => {
           const location = item.location || 'Principal';
           const stockId = stockMap.get(`${item.productId}_${location}`);
           return {
@@ -89,7 +110,7 @@ export class ProductPurchasesService {
       );
 
       // 4 — Increment product stock quantities
-      for (const item of dto.items) {
+      for (const item of itemsToProcess) {
         const location = item.location || 'Principal';
         const stockId = stockMap.get(`${item.productId}_${location}`);
         await this.productStocksRepository.incrementQuantity(
@@ -202,14 +223,54 @@ export class ProductPurchasesService {
         );
       }
 
-      const stockMap = await this.getOrCreateStocks(organizationId, dto.items, tx);
-      const additionalAmount = this.calcTotal(dto.items);
-      const newTotal = purchase.totalAmount.plus(new Prisma.Decimal(additionalAmount));
+      // Consolidate input items to prevent duplicate rows for the same product in the request
+      const consolidatedInput: { productId: string; location: string; quantity: number; unitCost?: number }[] = [];
+      for (const item of dto.items) {
+        const location = item.location || 'Principal';
+        const existing = consolidatedInput.find(
+          (c) => c.productId === item.productId && c.location === location,
+        );
+        if (existing) {
+          existing.quantity += item.quantity;
+          if (item.unitCost != null) {
+            existing.unitCost = item.unitCost;
+          }
+        } else {
+          consolidatedInput.push({
+            productId: item.productId,
+            location,
+            quantity: item.quantity,
+            unitCost: item.unitCost ?? undefined,
+          });
+        }
+      }
 
+      // Get stock map for new/existing products
+      const stockMap = await this.getOrCreateStocks(organizationId, consolidatedInput, tx);
+
+      // Load existing movements for this purchase
+      const existingMovements = await tx.inventoryMovement.findMany({
+        where: { productPurchaseId: purchase.id },
+      });
+
+      // 1 — Reverse all existing stock contributions
+      for (const mov of existingMovements) {
+        await this.productStocksRepository.incrementQuantity(
+          mov.stockId,
+          new Prisma.Decimal(mov.quantity).negated(),
+          tx,
+        );
+      }
+
+      // 2 — Delete all existing movements physically
+      await tx.inventoryMovement.deleteMany({
+        where: { productPurchaseId: purchase.id },
+      });
+
+      // 3 — Bulk insert the new consolidated movements
       await this.inventoryMovementsRepository.createMany(
-        dto.items.map((item) => {
-          const location = item.location || 'Principal';
-          const stockId = stockMap.get(`${item.productId}_${location}`);
+        consolidatedInput.map((item) => {
+          const stockId = stockMap.get(`${item.productId}_${item.location}`);
           return {
             organizationId,
             productId: item.productId,
@@ -224,9 +285,9 @@ export class ProductPurchasesService {
         tx,
       );
 
-      for (const item of dto.items) {
-        const location = item.location || 'Principal';
-        const stockId = stockMap.get(`${item.productId}_${location}`);
+      // 4 — Increment stock quantities for the new consolidated items
+      for (const item of consolidatedInput) {
+        const stockId = stockMap.get(`${item.productId}_${item.location}`);
         await this.productStocksRepository.incrementQuantity(
           stockId!,
           new Prisma.Decimal(item.quantity),
@@ -234,9 +295,12 @@ export class ProductPurchasesService {
         );
       }
 
+      // 5 — Recalculate purchase totalAmount
+      const newTotal = this.calcTotal(consolidatedInput);
+
       return this.productPurchasesRepository.update(
         purchase.id,
-        { totalAmount: newTotal },
+        { totalAmount: new Prisma.Decimal(newTotal) },
         tx,
       );
     });

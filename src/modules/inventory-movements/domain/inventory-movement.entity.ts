@@ -14,6 +14,7 @@ export class InventoryMovementEntity {
   readonly performedByUserId: string | null;
   readonly saleId: string | null;
   readonly productionId: string | null;
+  readonly productPurchaseId: string | null;
   readonly productName: string | null;
   readonly createdAt: Date;
 
@@ -31,6 +32,7 @@ export class InventoryMovementEntity {
     performedByUserId: string | null;
     saleId: string | null;
     productionId: string | null;
+    productPurchaseId: string | null;
     productName?: string | null;
     createdAt: Date;
   }) {
@@ -47,6 +49,7 @@ export class InventoryMovementEntity {
     this.performedByUserId = params.performedByUserId;
     this.saleId = params.saleId;
     this.productionId = params.productionId;
+    this.productPurchaseId = params.productPurchaseId;
     this.productName = params.productName ?? null;
     this.createdAt = params.createdAt;
   }
@@ -65,6 +68,7 @@ export class InventoryMovementEntity {
     performedByUserId: string | null;
     saleId: string | null;
     productionId: string | null;
+    productPurchaseId: string | null;
     createdAt: Date;
     product?: { name: string } | null;
   }): InventoryMovementEntity {
@@ -74,3 +78,4 @@ export class InventoryMovementEntity {
     });
   }
 }
+
