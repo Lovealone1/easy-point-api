@@ -29,6 +29,8 @@ export class SupplyMovementsService {
     if (query.supplyId) where.supplyId = query.supplyId;
     if (query.stockId) where.stockId = query.stockId;
     if (query.type) where.type = query.type;
+    if (query.supplyPurchaseId) where.supplyPurchaseId = query.supplyPurchaseId;
+    if (query.productionId) where.productionId = query.productionId;
 
     const [items, count] = await this.supplyMovementsRepository.findManyWithCount({
       where,

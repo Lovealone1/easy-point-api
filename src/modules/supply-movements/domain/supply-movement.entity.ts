@@ -12,6 +12,9 @@ export class SupplyMovementEntity {
   readonly referenceId: string | null;
   readonly referenceType: string | null;
   readonly performedByUserId: string | null;
+  readonly supplyPurchaseId: string | null;
+  readonly productionId: string | null;
+  readonly supplyName: string | null;
   readonly createdAt: Date;
 
   constructor(params: {
@@ -26,6 +29,9 @@ export class SupplyMovementEntity {
     referenceId: string | null;
     referenceType: string | null;
     performedByUserId: string | null;
+    supplyPurchaseId: string | null;
+    productionId: string | null;
+    supplyName?: string | null;
     createdAt: Date;
   }) {
     this.id = params.id;
@@ -39,6 +45,9 @@ export class SupplyMovementEntity {
     this.referenceId = params.referenceId;
     this.referenceType = params.referenceType;
     this.performedByUserId = params.performedByUserId;
+    this.supplyPurchaseId = params.supplyPurchaseId;
+    this.productionId = params.productionId;
+    this.supplyName = params.supplyName ?? null;
     this.createdAt = params.createdAt;
   }
 
@@ -54,21 +63,14 @@ export class SupplyMovementEntity {
     referenceId: string | null;
     referenceType: string | null;
     performedByUserId: string | null;
+    supplyPurchaseId: string | null;
+    productionId: string | null;
     createdAt: Date;
+    supply?: { name: string } | null;
   }): SupplyMovementEntity {
     return new SupplyMovementEntity({
-      id: raw.id,
-      organizationId: raw.organizationId,
-      supplyId: raw.supplyId,
-      stockId: raw.stockId,
-      quantity: raw.quantity,
-      unitCost: raw.unitCost,
-      type: raw.type,
-      reason: raw.reason,
-      referenceId: raw.referenceId,
-      referenceType: raw.referenceType,
-      performedByUserId: raw.performedByUserId,
-      createdAt: raw.createdAt,
+      ...raw,
+      supplyName: raw.supply?.name ?? null,
     });
   }
 }

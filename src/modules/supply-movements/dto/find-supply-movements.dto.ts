@@ -23,4 +23,14 @@ export class FindSupplyMovementsDto extends PageOptionsDto {
   @IsOptional()
   @IsEnum(SupplyMovementType)
   type?: SupplyMovementType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  supplyPurchaseId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  productionId?: string;
 }
