@@ -63,6 +63,6 @@ describe('SaleEntity', () => {
 
     expect(entity).toBeInstanceOf(SaleEntity);
     expect(entity.id).toBe(mockRawData.id);
-    expect(entity.totalAmount.toNumber()).toBe(90);
+    expect(entity.totalAmount).toBe(90);
   });
 });
