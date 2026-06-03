@@ -12,6 +12,10 @@ export class SupplyStockEntryEntity {
   readonly createdAt: Date;
   readonly updatedAt: Date;
 
+  /** Populated via join when fetched through findManyWithCount / findById */
+  readonly supplyName?: string;
+  readonly supplyUnitOfMeasure?: string;
+
   constructor(params: {
     id: string;
     organizationId: string;
@@ -23,6 +27,8 @@ export class SupplyStockEntryEntity {
     isExhausted: boolean;
     createdAt: Date;
     updatedAt: Date;
+    supplyName?: string;
+    supplyUnitOfMeasure?: string;
   }) {
     this.id = params.id;
     this.organizationId = params.organizationId;
@@ -34,6 +40,8 @@ export class SupplyStockEntryEntity {
     this.isExhausted = params.isExhausted;
     this.createdAt = params.createdAt;
     this.updatedAt = params.updatedAt;
+    this.supplyName = params.supplyName;
+    this.supplyUnitOfMeasure = params.supplyUnitOfMeasure;
   }
 
   /**
@@ -84,6 +92,9 @@ export class SupplyStockEntryEntity {
     isExhausted: boolean;
     createdAt: Date;
     updatedAt: Date;
+    supplyStock?: {
+      supply?: { name: string; unitOfMeasure: string } | null;
+    } | null;
   }): SupplyStockEntryEntity {
     return new SupplyStockEntryEntity({
       id: raw.id,
@@ -96,6 +107,8 @@ export class SupplyStockEntryEntity {
       isExhausted: raw.isExhausted,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
+      supplyName: raw.supplyStock?.supply?.name,
+      supplyUnitOfMeasure: raw.supplyStock?.supply?.unitOfMeasure,
     });
   }
 }

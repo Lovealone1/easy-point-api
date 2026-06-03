@@ -24,7 +24,17 @@ export class SupplyStockEntriesRepository {
   }): Promise<[SupplyStockEntryEntity[], number]> {
     const { skip, take, where, orderBy } = params;
     const [rows, count] = await Promise.all([
-      this.prisma.supplyStockEntry.findMany({ skip, take, where, orderBy }),
+      this.prisma.supplyStockEntry.findMany({
+        skip,
+        take,
+        where,
+        orderBy,
+        include: {
+          supplyStock: {
+            include: { supply: { select: { name: true, unitOfMeasure: true } } },
+          },
+        },
+      }),
       this.prisma.supplyStockEntry.count({ where }),
     ]);
     return [rows.map(SupplyStockEntryEntity.fromPrisma), count];
@@ -32,7 +42,14 @@ export class SupplyStockEntriesRepository {
 
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<SupplyStockEntryEntity | null> {
     const client = tx ?? this.prisma;
-    const raw = await client.supplyStockEntry.findUnique({ where: { id } });
+    const raw = await client.supplyStockEntry.findUnique({
+      where: { id },
+      include: {
+        supplyStock: {
+          include: { supply: { select: { name: true, unitOfMeasure: true } } },
+        },
+      },
+    });
     return raw ? SupplyStockEntryEntity.fromPrisma(raw) : null;
   }
 

@@ -3,6 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '@prisma/client';
 import { SupplyMovementEntity } from './domain/supply-movement.entity.js';
 
+const MOVEMENT_INCLUDE = {
+  supply: { select: { name: true } },
+} satisfies Prisma.SupplyMovementInclude;
+
 @Injectable()
 export class SupplyMovementsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -15,10 +19,10 @@ export class SupplyMovementsRepository {
   }): Promise<[SupplyMovementEntity[], number]> {
     const { skip, take, where, orderBy } = params;
     const [rows, count] = await Promise.all([
-      this.prisma.supplyMovement.findMany({ skip, take, where, orderBy }),
+      this.prisma.supplyMovement.findMany({ skip, take, where, orderBy, include: MOVEMENT_INCLUDE }),
       this.prisma.supplyMovement.count({ where }),
     ]);
-    return [rows.map(SupplyMovementEntity.fromPrisma), count];
+    return [rows.map(row => SupplyMovementEntity.fromPrisma(row as any)), count];
   }
 
   /**
@@ -36,7 +40,7 @@ export class SupplyMovementsRepository {
 
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<SupplyMovementEntity | null> {
     const client = tx ?? this.prisma;
-    const raw = await client.supplyMovement.findUnique({ where: { id } });
-    return raw ? SupplyMovementEntity.fromPrisma(raw) : null;
+    const raw = await client.supplyMovement.findUnique({ where: { id }, include: MOVEMENT_INCLUDE });
+    return raw ? SupplyMovementEntity.fromPrisma(raw as any) : null;
   }
 }
