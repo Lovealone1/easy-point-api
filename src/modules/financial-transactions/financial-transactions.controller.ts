@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Delete,
   UseGuards,
   Query,
   HttpCode,
@@ -93,5 +94,17 @@ export class FinancialTransactionsController {
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
   findOne(@Param('id') id: string) {
     return this.financialTransactionsService.findOne(id);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, OrgRolesGuard)
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @ApiSecurity('x-organization-id')
+  @ApiOperation({ summary: 'Delete a manual transaction / adjustment (Org Owner / Org Admin)' })
+  @ApiOkResponse({ description: 'Transaction deleted and balance reverted successfully.' })
+  @ApiNotFoundResponse({ description: 'Not found.' })
+  @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
+  remove(@Param('id') id: string) {
+    return this.financialTransactionsService.remove(id);
   }
 }

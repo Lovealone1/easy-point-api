@@ -85,6 +85,14 @@ export class FinancialTransactionsService {
     if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
     if (query.categoryId) where.categoryId = query.categoryId;
 
+    if (query.search) {
+      where.OR = [
+        { transactionNumber: { contains: query.search, mode: "insensitive" } },
+        { description: { contains: query.search, mode: "insensitive" } },
+        { referenceId: { contains: query.search, mode: "insensitive" } },
+      ];
+    }
+
     const [items, count] = await this.financialTransactionsRepository.findManyWithCount({
       where,
       skip: query.skip,
@@ -193,6 +201,75 @@ export class FinancialTransactionsService {
     if (externalTx) {
       return execute(externalTx);
     }
+
+    return this.prisma.$transaction(execute);
+  }
+
+  async remove(id: string): Promise<FinancialTransactionEntity> {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      // 1. Fetch transaction
+      const transaction = await this.financialTransactionsRepository.findById(id);
+      if (!transaction) {
+        throw new NotFoundException(`Financial transaction with ID ${id} not found`);
+      }
+
+      // 2. Guard: Only ADJUSTMENT transactions can be deleted
+      if (transaction.operationType !== OperationType.ADJUSTMENT) {
+        throw new BadRequestException(
+          'Solo se pueden eliminar transacciones manuales de tipo AJUSTE.',
+        );
+      }
+
+      // 3. Load bank account inside the transaction
+      const account = await this.bankAccountsRepository.findById(transaction.bankAccountId, tx);
+      if (!account) {
+        throw new NotFoundException(
+          `Bank account with ID ${transaction.bankAccountId} associated with the transaction was not found`,
+        );
+      }
+
+      // 4. Guard: account must be ACTIVE
+      if (account.status !== BankAccountStatus.ACTIVE) {
+        throw new UnprocessableEntityException(
+          `La cuenta bancaria "${account.name}" está ${account.status} y no puede recibir actualizaciones`,
+        );
+      }
+
+      // 5. Revert the balance change on the domain entity
+      const versionBefore = account.version;
+      try {
+        if (transaction.type === TransactionType.CREDIT) {
+          // Was a credit (deposit), so we must DECREASE balance
+          account.decreaseBalance(transaction.amount); // throws if insufficient funds
+        } else {
+          // Was a debit (withdrawal), so we must INCREASE balance
+          account.increaseBalance(transaction.amount);
+        }
+      } catch (error: any) {
+        throw new BadRequestException(error.message);
+      }
+      const balanceAfter = account.balance;
+
+      // 6. Update bank account balance with OCC check
+      try {
+        await this.bankAccountsRepository.updateWithVersion(
+          account.id,
+          versionBefore,
+          { balance: balanceAfter },
+          tx,
+        );
+      } catch (error: any) {
+        if (error?.code === 'P2025') {
+          throw new ConflictException(
+            'Concurrent balance update detected. Please retry the operation.',
+          );
+        }
+        throw error;
+      }
+
+      // 7. Delete the transaction record
+      return this.financialTransactionsRepository.delete(id, tx);
+    };
 
     return this.prisma.$transaction(execute);
   }

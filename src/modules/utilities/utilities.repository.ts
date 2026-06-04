@@ -122,7 +122,15 @@ export class UtilitiesRepository {
         take,
         where,
         orderBy: { createdAt: 'desc' },
-        include: includeItems ? { items: true } : undefined,
+        include: {
+          items: includeItems ? true : false,
+          sale: {
+            include: {
+              client: { select: { name: true } },
+              performedBy: { select: { email: true } },
+            },
+          },
+        },
       }),
       this.prisma.saleUtility.count({ where }),
     ]);
@@ -132,7 +140,15 @@ export class UtilitiesRepository {
   async findById(id: string): Promise<SaleUtilityEntity | null> {
     const raw = await this.prisma.saleUtility.findUnique({
       where: { id },
-      include: { items: true },
+      include: {
+        items: true,
+        sale: {
+          include: {
+            client: { select: { name: true } },
+            performedBy: { select: { email: true } },
+          },
+        },
+      },
     });
     return raw ? SaleUtilityEntity.fromPrisma(raw) : null;
   }
