@@ -23,6 +23,9 @@ export class FinancialTransactionEntity {
   readonly metadata: Prisma.JsonValue | null;
   readonly performedByUserId: string | null;
   readonly createdAt: Date;
+  readonly bankAccountName?: string | null;
+  readonly categoryName?: string | null;
+  readonly performedByUserEmail?: string | null;
 
   constructor(params: {
     id: string;
@@ -42,6 +45,9 @@ export class FinancialTransactionEntity {
     metadata: Prisma.JsonValue | null;
     performedByUserId: string | null;
     createdAt: Date;
+    bankAccountName?: string | null;
+    categoryName?: string | null;
+    performedByUserEmail?: string | null;
   }) {
     this.id = params.id;
     this.organizationId = params.organizationId;
@@ -60,6 +66,9 @@ export class FinancialTransactionEntity {
     this.metadata = params.metadata;
     this.performedByUserId = params.performedByUserId;
     this.createdAt = params.createdAt;
+    this.bankAccountName = params.bankAccountName ?? null;
+    this.categoryName = params.categoryName ?? null;
+    this.performedByUserEmail = params.performedByUserEmail ?? null;
   }
 
   static fromPrisma(raw: {
@@ -80,7 +89,15 @@ export class FinancialTransactionEntity {
     metadata: Prisma.JsonValue | null;
     performedByUserId: string | null;
     createdAt: Date;
+    bankAccount?: { name: string } | null;
+    category?: { name: string } | null;
+    performedBy?: { email: string } | null;
   }): FinancialTransactionEntity {
-    return new FinancialTransactionEntity(raw);
+    return new FinancialTransactionEntity({
+      ...raw,
+      bankAccountName: raw.bankAccount?.name ?? null,
+      categoryName: raw.category?.name ?? null,
+      performedByUserEmail: raw.performedBy?.email ?? null,
+    });
   }
 }
