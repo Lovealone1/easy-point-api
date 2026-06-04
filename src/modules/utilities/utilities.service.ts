@@ -199,6 +199,14 @@ export class UtilitiesService {
       };
     }
 
+    if (query.search) {
+      where.OR = [
+        { saleId: { contains: query.search, mode: 'insensitive' } },
+        { sale: { client: { name: { contains: query.search, mode: 'insensitive' } } } },
+        { sale: { performedBy: { email: { contains: query.search, mode: 'insensitive' } } } },
+      ];
+    }
+
     return where;
   }
 
@@ -230,6 +238,15 @@ export class UtilitiesService {
         saleFilter.transaction = { paymentMethod: query.paymentMethod };
       }
       where.saleUtility = { sale: saleFilter };
+    }
+
+    if (query.search) {
+      where.OR = [
+        { productId: { contains: query.search, mode: 'insensitive' } },
+        { product: { name: { contains: query.search, mode: 'insensitive' } } },
+        { saleUtility: { sale: { client: { name: { contains: query.search, mode: 'insensitive' } } } } },
+        { saleUtility: { sale: { performedBy: { email: { contains: query.search, mode: 'insensitive' } } } } },
+      ];
     }
 
     return where;
