@@ -413,11 +413,12 @@ export class ProductionsService {
             where: { productionId: id },
           });
 
-          await tx.productStock.updateMany({
+          await tx.productStock.update({
             where: {
-              organizationId: production.organizationId,
-              productId: prodId,
-              location: 'Principal',
+              productId_location: {
+                productId: prodId,
+                location: 'Principal',
+              },
             },
             data: {
               quantity: { decrement: new Prisma.Decimal(production.quantityProduced) },

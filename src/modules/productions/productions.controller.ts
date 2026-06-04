@@ -120,9 +120,14 @@ export class ProductionsController {
   @UseGuards(JwtAuthGuard, OrgRolesGuard)
   @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'Eliminar una producción (solo DRAFT o CANCELLED) (Owner / Admin)' })
-  @ApiOkResponse({ description: 'Producción eliminada.' })
-  @ApiBadRequestResponse({ description: 'No se puede eliminar una producción completada.' })
+  @ApiOperation({
+    summary: 'Eliminar una producción (Owner / Admin)',
+    description:
+      'Elimina una producción de forma permanente. Si la producción está en estado COMPLETADA, ' +
+      'se revertirán los movimientos de stock: se restablecerán los insumos consumidos y se descontará ' +
+      'el stock del producto resultante.',
+  })
+  @ApiOkResponse({ description: 'Producción eliminada y stocks revertidos.' })
   @ApiNotFoundResponse({ description: 'No encontrada.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded (moderateIp).' })
   remove(@Param('id') id: string) {
