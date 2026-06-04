@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { SaleItemUtilityEntity } from './sale-item-utility.entity.js';
+import { SaleEntity } from '../../sales/domain/sale.entity.js';
 
 export class SaleUtilityEntity {
   readonly id: string;
@@ -12,6 +13,7 @@ export class SaleUtilityEntity {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   items?: SaleItemUtilityEntity[];
+  sale?: SaleEntity;
 
   constructor(params: {
     id: string;
@@ -24,6 +26,7 @@ export class SaleUtilityEntity {
     createdAt: Date;
     updatedAt: Date;
     items?: SaleItemUtilityEntity[];
+    sale?: SaleEntity;
   }) {
     this.id = params.id;
     this.organizationId = params.organizationId;
@@ -35,6 +38,7 @@ export class SaleUtilityEntity {
     this.createdAt = params.createdAt;
     this.updatedAt = params.updatedAt;
     this.items = params.items;
+    this.sale = params.sale;
   }
 
   // ─── Business logic ────────────────────────────────────────────────────────
@@ -82,11 +86,13 @@ export class SaleUtilityEntity {
       createdAt: Date;
       updatedAt: Date;
       items?: Parameters<typeof SaleItemUtilityEntity.fromPrisma>[0][];
+      sale?: any;
     },
   ): SaleUtilityEntity {
     return new SaleUtilityEntity({
       ...raw,
       items: raw.items?.map(SaleItemUtilityEntity.fromPrisma),
+      sale: raw.sale ? SaleEntity.fromPrisma(raw.sale) : undefined,
     });
   }
 }
