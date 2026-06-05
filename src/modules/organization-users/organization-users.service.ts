@@ -2,16 +2,19 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { OrganizationUsersRepository } from './organization-users.repository.js';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto.js';
 import { UpdateOrganizationUserDto } from './dto/update-organization-user.dto.js';
+import { FindOrganizationUsersDto } from './dto/find-organization-users.dto.js';
 import { Role } from '../../common/enums/role.enum.js';
 import { Prisma } from '@prisma/client';
-import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { OrganizationUserEntity } from './domain/organization-user.entity.js';
+import { getTenantId } from '../../common/context/tenant.context.js';
+
 
 /**
  * Service de OrganizationUser — capa de aplicación (orquestación).
@@ -35,7 +38,11 @@ export class OrganizationUsersService {
   async create(
     createOrganizationUserDto: CreateOrganizationUserDto,
   ): Promise<OrganizationUserEntity> {
-    const { userId, organizationId, role } = createOrganizationUserDto;
+    const { userId, role } = createOrganizationUserDto;
+    const organizationId = getTenantId();
+    if (!organizationId) {
+      throw new BadRequestException('Missing x-organization-id header');
+    }
 
     // Verificar membresía duplicada
     const existing =
@@ -65,54 +72,54 @@ export class OrganizationUsersService {
     return this.organizationUsersRepository.create({
       userId,
       organizationId,
-      role: assignedRole, // this will be passed to repo.create which accepts { role: string }
+      role: assignedRole,
     });
   }
 
   async findAll(
-    organizationId: string,
-    pageOptionsDto: PageOptionsDto,
+    query: FindOrganizationUsersDto,
   ): Promise<PageDto<OrganizationUserEntity>> {
-    const skip = pageOptionsDto.skip;
-    const take = pageOptionsDto.limit;
+    const where: Prisma.OrganizationUserWhereInput = {};
 
-    const orderDirection = pageOptionsDto.order
-      ? (pageOptionsDto.order.toLowerCase() as Prisma.SortOrder)
+    const tenantId = getTenantId();
+    if (tenantId) where.organizationId = tenantId;
+
+    if (query.organizationId) where.organizationId = query.organizationId;
+
+    if (query.search) {
+      where.user = {
+        OR: [
+          { email: { contains: query.search, mode: 'insensitive' } },
+          { firstName: { contains: query.search, mode: 'insensitive' } },
+          { lastName: { contains: query.search, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    const orderDirection = query.order
+      ? (query.order.toLowerCase() as Prisma.SortOrder)
       : 'desc';
 
     // OrganizationUser usa joinedAt en vez de createdAt
     const orderByField =
-      pageOptionsDto.orderBy === 'createdAt'
+      query.orderBy === 'createdAt'
         ? 'joinedAt'
-        : (pageOptionsDto.orderBy ?? 'joinedAt');
+        : (query.orderBy ?? 'joinedAt');
 
     const orderBy: Prisma.OrganizationUserOrderByWithRelationInput = {
       [orderByField]: orderDirection,
     };
 
-    const where: Prisma.OrganizationUserWhereInput = {
-      organizationId,
-      ...(pageOptionsDto.search && {
-        user: {
-          OR: [
-            { email: { contains: pageOptionsDto.search, mode: 'insensitive' } },
-            { firstName: { contains: pageOptionsDto.search, mode: 'insensitive' } },
-            { lastName: { contains: pageOptionsDto.search, mode: 'insensitive' } },
-          ],
-        },
-      }),
-    };
-
     const [data, itemCount] =
       await this.organizationUsersRepository.findManyWithCount({
-        skip,
-        take,
+        skip: query.skip,
+        take: query.limit,
         orderBy,
         where,
         includeUser: true,
       });
 
-    const pageMetaDto = new PageMetaDto({ itemCount, pageOptionsDto });
+    const pageMetaDto = new PageMetaDto({ itemCount, pageOptionsDto: query });
     return new PageDto(data, pageMetaDto);
   }
 
@@ -128,12 +135,16 @@ export class OrganizationUsersService {
     return member;
   }
 
-  async updateRole(
+  async update(
     id: string,
     updateOrganizationUserDto: UpdateOrganizationUserDto,
   ): Promise<OrganizationUserEntity> {
     const member = await this.findOne(id);
     const newRole = updateOrganizationUserDto.role;
+
+    if (!newRole) {
+      return member;
+    }
 
     // La entidad evalúa el invariante — el service provee los datos de contexto
     const ownerCount = await this.organizationUsersRepository.countOwners(
@@ -149,7 +160,7 @@ export class OrganizationUsersService {
     // La entidad aplica el cambio de rol antes de persistir
     member.applyRoleChange(newRole);
 
-    return this.organizationUsersRepository.updateRole(id, newRole, member.organizationId);
+    return this.organizationUsersRepository.update(id, { role: newRole }, member);
   }
 
   async remove(id: string): Promise<OrganizationUserEntity> {
