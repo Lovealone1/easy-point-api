@@ -63,4 +63,20 @@ export class InvitationsRepository {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async findMany(organizationId: string): Promise<InvitationWithOrg[]> {
+    return this.prisma.invitation.findMany({
+      where: { organizationId },
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+        role: {
+          select: { name: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
+

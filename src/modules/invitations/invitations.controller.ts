@@ -64,6 +64,28 @@ export class InvitationsController {
     return this.invitationsService.createInvitation(organizationId, dto);
   }
 
+  // ── GET /invitations ────────────────────────────────────────────────────────
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, OrgRolesGuard)
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all invitations for the active organization',
+    description: 'Lists all invitations (pending, accepted, expired, revoked) for the active organization.',
+  })
+  @ApiOkResponse({ description: 'List of invitations' })
+  @ApiBadRequestResponse({ description: 'Organization context is missing.' })
+  async getInvitations() {
+    const organizationId = getTenantId();
+    if (!organizationId) {
+      throw new BadRequestException(
+        'Organization context is missing. Send x-organization-id header.',
+      );
+    }
+    return this.invitationsService.findAll(organizationId);
+  }
+
   // ── GET /invitations/verify/:token ─────────────────────────────────────────
   @Get('verify/:token')
   @HttpCode(HttpStatus.OK)

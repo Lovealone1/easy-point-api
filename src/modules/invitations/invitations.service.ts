@@ -14,7 +14,7 @@ import crypto from 'crypto';
 
 import appConfig from '../../common/config/config.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { InvitationsRepository } from './invitations.repository.js';
+import { InvitationsRepository, InvitationWithOrg } from './invitations.repository.js';
 import { OrganizationUsersRepository } from '../organization-users/organization-users.repository.js';
 import { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import { MailService } from '../../infraestructure/mail/mail.service.js';
@@ -88,7 +88,7 @@ export class InvitationsService {
     });
 
     if (organization && roleData) {
-      const invitationLink = `${this.config.app.frontendUrl}/invitations/accept?token=${token}`;
+      const invitationLink = `${this.config.app.frontendUrl}/auth/invitation?token=${token}`;
       const htmlContent = getInvitationEmailTemplate(
         organization.name,
         roleData.name,
@@ -107,6 +107,26 @@ export class InvitationsService {
       invitationId: invitation.id,
     };
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /invitations (list all organization invitations)
+  // ────────────────────────────────────────────────────────────────────────────
+  async findAll(organizationId: string): Promise<InvitationWithOrg[]> {
+    // Lazily update expired pending invitations for this organization
+    await this.prismaService.invitation.updateMany({
+      where: {
+        organizationId,
+        status: InvitationStatus.PENDING,
+        expiresAt: { lt: new Date() },
+      },
+      data: {
+        status: InvitationStatus.EXPIRED,
+      },
+    });
+
+    return this.invitationsRepository.findMany(organizationId);
+  }
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // GET /invitations/verify/:token  (public)
