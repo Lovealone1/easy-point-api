@@ -8,13 +8,9 @@ export class CreateOrganizationUserDto {
   @IsNotEmpty()
   userId: string;
 
-  @ApiProperty({ description: 'The ID of the organization', format: 'uuid' })
-  @IsUUID(4)
-  @IsNotEmpty()
-  organizationId: string;
-
   @ApiProperty({ enum: Role, required: false, default: 'USER', description: 'The role of the user within the organization' })
   @IsEnum(Role)
   @IsOptional()
   role?: Role;
 }
+
