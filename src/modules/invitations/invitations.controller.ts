@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Param,
   HttpCode,
@@ -130,5 +131,29 @@ export class InvitationsController {
       userEmail,
       dto.invitationToken,
     );
+  }
+
+  // ── DELETE /invitations/:id ──────────────────────────────────────────────────
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, OrgRolesGuard)
+  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete a pending invitation',
+    description: 'Deletes a pending invitation by ID. Restricted to OWNER and ADMINISTRATOR roles.',
+  })
+  @ApiParam({ name: 'id', description: 'Invitation UUID' })
+  @ApiOkResponse({ description: 'Invitation deleted successfully.' })
+  @ApiBadRequestResponse({ description: 'Invitation is not in PENDING status or organization context missing.' })
+  @ApiNotFoundResponse({ description: 'Invitation not found.' })
+  async deleteInvitation(@Param('id') id: string) {
+    const organizationId = getTenantId();
+    if (!organizationId) {
+      throw new BadRequestException(
+        'Organization context is missing. Send x-organization-id header.',
+      );
+    }
+    return this.invitationsService.deleteInvitation(id, organizationId);
   }
 }

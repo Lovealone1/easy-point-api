@@ -84,7 +84,12 @@ export class InvitationsService {
     });
 
     const roleData = await this.prismaService.role.findUnique({
-      where: { id: role },
+      where: {
+        organizationId_name: {
+          organizationId,
+          name: role,
+        },
+      },
     });
 
     if (organization && roleData) {
@@ -320,4 +325,26 @@ export class InvitationsService {
       invitations,
     };
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DELETE /invitations/:id (delete a pending invitation)
+  // ────────────────────────────────────────────────────────────────────────────
+  async deleteInvitation(id: string, organizationId: string): Promise<{ message: string }> {
+    const invitation = await this.invitationsRepository.findById(id);
+
+    if (!invitation || invitation.organizationId !== organizationId) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Only pending invitations can be deleted');
+    }
+
+    await this.invitationsRepository.delete(id);
+
+    return {
+      message: 'Invitation deleted successfully',
+    };
+  }
 }
+

@@ -78,5 +78,17 @@ export class InvitationsRepository {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async findById(id: string): Promise<Invitation | null> {
+    return this.prisma.invitation.findUnique({
+      where: { id },
+    });
+  }
+
+  async delete(id: string): Promise<Invitation> {
+    return this.prisma.invitation.delete({
+      where: { id },
+    });
+  }
 }
 
