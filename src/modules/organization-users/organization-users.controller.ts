@@ -10,18 +10,26 @@ import {
   Query,
   HttpCode,
   HttpStatus,
-  BadRequestException,
 } from '@nestjs/common';
 import { OrganizationUsersService } from './organization-users.service.js';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto.js';
 import { UpdateOrganizationUserDto } from './dto/update-organization-user.dto.js';
 import { FindOrganizationUsersDto } from './dto/find-organization-users.dto.js';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiTooManyRequestsResponse, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiConflictResponse, ApiQuery, ApiSecurity } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiTooManyRequestsResponse,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiConflictResponse,
+  ApiSecurity,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
 import { Role } from '../../common/enums/role.enum.js';
-import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
 @ApiTags('Organization Users')
@@ -45,16 +53,12 @@ export class OrganizationUsersController {
 
   @Get()
   @ApiOperation({ summary: 'List all members of an organization paginated (Admin / Org Owner / Org Admin)' })
-  @ApiQuery({ name: 'organizationId', required: true, description: 'The UUID of the organization', type: String })
   @ApiOkResponse({ description: 'List of all users in the organization paginated.', type: PageDto })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
   findAll(
     @Query() findOptionsDto: FindOrganizationUsersDto
   ) {
-    if (!findOptionsDto.organizationId) {
-       throw new BadRequestException('organizationId is required query parameter');
-    }
-    return this.organizationUsersService.findAll(findOptionsDto.organizationId, findOptionsDto);
+    return this.organizationUsersService.findAll(findOptionsDto);
   }
 
   @Patch(':id')
@@ -63,11 +67,11 @@ export class OrganizationUsersController {
   @ApiConflictResponse({ description: 'An OWNER already exists.' })
   @ApiNotFoundResponse({ description: 'Association not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
-  updateRole(
+  update(
     @Param('id') id: string,
     @Body() updateOrganizationUserDto: UpdateOrganizationUserDto,
   ) {
-    return this.organizationUsersService.updateRole(id, updateOrganizationUserDto);
+    return this.organizationUsersService.update(id, updateOrganizationUserDto);
   }
 
   @Delete(':id')

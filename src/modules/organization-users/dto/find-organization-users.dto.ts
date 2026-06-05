@@ -1,9 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsUUID } from 'class-validator';
 import { PageOptionsDto } from '../../../common/pagination/page-options.dto.js';
 
 export class FindOrganizationUsersDto extends PageOptionsDto {
-  @ApiProperty({ description: 'The UUID of the organization' })
+  @ApiPropertyOptional({ description: 'The UUID of the organization' })
+  @IsOptional()
   @IsUUID()
-  readonly organizationId: string;
+  readonly organizationId?: string;
 }
+

@@ -81,11 +81,28 @@ export class OrganizationUsersRepository {
     return raw ? OrganizationUserEntity.fromPrisma(raw) : null;
   }
 
-  async updateRole(id: string, role: string, organizationId: string): Promise<OrganizationUserEntity> {
+  async update(
+    id: string,
+    data: { role?: string },
+    currentEntity: OrganizationUserEntity,
+  ): Promise<OrganizationUserEntity> {
+    const updateData: Prisma.OrganizationUserUpdateInput = {};
+
+    if (data.role) {
+      updateData.role = {
+        connect: {
+          organizationId_name: {
+            organizationId: currentEntity.organizationId,
+            name: data.role,
+          },
+        },
+      };
+    }
+
     const raw = await this.prisma.organizationUser.update({
       where: { id },
-      data: { role: { connect: { organizationId_name: { organizationId, name: role } } } },
-      include: { role: true }
+      data: updateData,
+      include: { role: true },
     });
     return OrganizationUserEntity.fromPrisma(raw);
   }

@@ -1,10 +1,7 @@
-import { IsEnum, IsNotEmpty } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
-import { Role } from '../../../common/enums/role.enum.js';
+import { PartialType, OmitType } from '@nestjs/swagger';
+import { CreateOrganizationUserDto } from './create-organization-user.dto.js';
 
-export class UpdateOrganizationUserDto {
-  @ApiProperty({ enum: Role, description: 'The new role of the user within the organization' })
-  @IsEnum(Role)
-  @IsNotEmpty()
-  role: Role;
-}
+export class UpdateOrganizationUserDto extends PartialType(
+  OmitType(CreateOrganizationUserDto, ['userId'] as const),
+) {}
+
