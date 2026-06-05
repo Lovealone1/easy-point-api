@@ -52,4 +52,14 @@ export class UpdateOrganizationConfigDto {
   @IsOptional()
   @IsString()
   receiptFooter?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  organizationName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  organizationEmail?: string;
 }

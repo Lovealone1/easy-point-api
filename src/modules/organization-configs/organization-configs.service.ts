@@ -5,6 +5,7 @@ import { getTenantId } from '../../common/context/tenant.context.js';
 import { OrganizationConfigEntity } from './domain/organization-config.entity.js';
 import { StorageService } from '../../infraestructure/storage/storage.service.js';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
 
 @Injectable()
 export class OrganizationConfigsService {
@@ -12,6 +13,7 @@ export class OrganizationConfigsService {
     private readonly configRepository: OrganizationConfigsRepository,
     private readonly storageService: StorageService,
     private readonly redisCacheService: RedisCacheService,
+    private readonly prisma: PrismaService,
   ) {}
 
   private async resolveLogo(
@@ -44,13 +46,23 @@ export class OrganizationConfigsService {
     try {
       const cached = await this.redisCacheService.get<any>(cacheKey);
       if (cached) {
-        cached.createdAt = new Date(cached.createdAt);
-        cached.updatedAt = new Date(cached.updatedAt);
-        if (cached.planActiveUntil) {
-          cached.planActiveUntil = new Date(cached.planActiveUntil);
+        if (!cached.organizationCreatedAt) {
+          // Cache is stale/outdated (lacks organizationCreatedAt), delete it to force reload from DB
+          await this.redisCacheService.delete(cacheKey);
+        } else {
+          console.log('GET CONFIG CACHED OBJECT:', cached);
+          cached.createdAt = new Date(cached.createdAt);
+          cached.updatedAt = new Date(cached.updatedAt);
+          if (cached.planActiveUntil) {
+            cached.planActiveUntil = new Date(cached.planActiveUntil);
+          }
+          if (cached.organizationCreatedAt) {
+            cached.organizationCreatedAt = new Date(cached.organizationCreatedAt);
+          }
+          const entity = new OrganizationConfigEntity(cached);
+          console.log('GET CONFIG CACHED ENTITY:', entity);
+          return this.resolveLogo(entity);
         }
-        const entity = new OrganizationConfigEntity(cached);
-        return this.resolveLogo(entity);
       }
     } catch (error) {
       console.error('Failed to fetch organization config cache:', error);
@@ -64,6 +76,8 @@ export class OrganizationConfigsService {
     if (!config) {
       config = await this.configRepository.upsert(organizationId, {});
     }
+
+    console.log('GET CONFIG DB ENTITY:', config);
 
     try {
       await this.redisCacheService.set(cacheKey, config);
@@ -82,7 +96,20 @@ export class OrganizationConfigsService {
       throw new BadRequestException('Missing x-organization-id header');
     }
 
-    const config = await this.configRepository.upsert(organizationId, dto);
+    const { organizationName, organizationEmail, ...configData } = dto;
+
+    if (organizationName !== undefined || organizationEmail !== undefined) {
+      const updateData: any = {};
+      if (organizationName !== undefined) updateData.name = organizationName;
+      if (organizationEmail !== undefined) updateData.email = organizationEmail;
+
+      await this.prisma.organization.update({
+        where: { id: organizationId },
+        data: updateData,
+      });
+    }
+
+    const config = await this.configRepository.upsert(organizationId, configData);
     
     // Invalidate cache
     try {
