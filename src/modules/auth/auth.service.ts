@@ -596,6 +596,7 @@ export class AuthService {
                 plan: orgUser.organization.plan,
                 planActiveUntil: orgUser.organization.planActiveUntil ?? null,
                 organizationIsActive: orgUser.organization.isActive,
+                organizationCreatedAt: orgUser.organization.createdAt,
               }
             : null,
         };

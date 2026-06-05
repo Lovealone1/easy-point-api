@@ -24,6 +24,7 @@ export class OrganizationConfigEntity {
   readonly plan: Plan;
   readonly planActiveUntil: Date | null;
   readonly organizationIsActive: boolean;
+  readonly organizationCreatedAt?: Date;
 
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -50,6 +51,7 @@ export class OrganizationConfigEntity {
     plan: Plan;
     planActiveUntil: Date | null;
     organizationIsActive: boolean;
+    organizationCreatedAt?: Date;
   }) {
     this.id = params.id;
     this.organizationId = params.organizationId;
@@ -72,6 +74,7 @@ export class OrganizationConfigEntity {
     this.plan = params.plan;
     this.planActiveUntil = params.planActiveUntil;
     this.organizationIsActive = params.organizationIsActive;
+    this.organizationCreatedAt = params.organizationCreatedAt;
   }
 
   static fromPrisma(raw: any): OrganizationConfigEntity {
@@ -97,6 +100,7 @@ export class OrganizationConfigEntity {
       plan: raw.organization?.plan || Plan.FREE,
       planActiveUntil: raw.organization?.planActiveUntil || null,
       organizationIsActive: raw.organization?.isActive ?? true,
+      organizationCreatedAt: raw.organization?.createdAt,
     });
   }
 }
