@@ -158,6 +158,16 @@ export class AuthService {
       if (!user) {
         throw new UnauthorizedException('User not found. Please register first.');
       }
+      if (invitationToken) {
+        await this.prismaService.$transaction(async (tx) => {
+          await this.invitationsService.acceptInvitationInTransaction(
+            tx,
+            user!.id,
+            email,
+            invitationToken,
+          );
+        });
+      }
     } else if (intent === 'REGISTER') {
       if (!user) {
         // Atomic transaction: Create user, and if invitation exists, accept it
