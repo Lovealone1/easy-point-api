@@ -16,7 +16,7 @@ export class RolesRepository {
     skip?: number;
     take?: number;
     where?: Prisma.RoleWhereInput;
-    orderBy?: Prisma.RoleOrderByWithRelationInput;
+    orderBy?: Prisma.RoleOrderByWithRelationInput | Prisma.RoleOrderByWithRelationInput[];
   }): Promise<[RoleEntity[], number]> {
     const { skip, take, where, orderBy } = params;
 
