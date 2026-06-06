@@ -53,9 +53,10 @@ export class RolesService {
 
     const orderByField = pageOptionsDto.orderBy ?? 'createdAt';
 
-    const orderBy: Prisma.RoleOrderByWithRelationInput = {
-      [orderByField]: orderDirection,
-    };
+    const orderBy: Prisma.RoleOrderByWithRelationInput[] = [
+      { isSystemDefault: 'desc' },
+      { [orderByField]: orderDirection },
+    ];
 
     const where: Prisma.RoleWhereInput = {
       organizationId,
