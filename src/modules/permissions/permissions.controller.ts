@@ -8,9 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
-  Req,
 } from '@nestjs/common';
-import { Request } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -27,6 +25,7 @@ import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
 import { Role } from '../../common/enums/role.enum.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @ApiTags('Permissions')
 @ApiSecurity('x-organization-id')
@@ -81,9 +80,7 @@ export class PermissionsController {
       },
     },
   })
-  async getMyPermissions(@Req() request: Request) {
-    // Extraemos el user del JWT — disponible gracias al JwtAuthGuard
-    const user = request.user as any;
+  async getMyPermissions(@CurrentUser() user: any) {
     return this.permissionsService.getMyPermissions(
       user?.sub || user?.id,
       this.getOrgIdOrThrow(),

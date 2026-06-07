@@ -41,6 +41,7 @@ import { DiscountRulesModule } from './modules/discount-rules/discount-rules.mod
 import { StorageModule } from './infraestructure/storage/storage.module.js';
 import { OrganizationConfigsModule } from './modules/organization-configs/organization-configs.module.js';
 import { PermissionsModule } from './modules/permissions/permissions.module.js';
+import { SystemModulesModule } from './modules/system-modules/system-modules.module.js';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module.js';
     CronModule,
     RolesModule,
     PermissionsModule,
+    SystemModulesModule,
     DiscountRulesModule,
   ],
   controllers: [],
