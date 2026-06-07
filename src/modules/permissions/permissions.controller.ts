@@ -21,16 +21,15 @@ import {
 import { PermissionsService } from './permissions.service.js';
 import { SetRolePermissionsDto } from './dto/set-role-permissions.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @ApiTags('Permissions')
 @ApiSecurity('x-organization-id')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, OrgRolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('permissions')
 export class PermissionsController {
   constructor(private readonly permissionsService: PermissionsService) {}
@@ -48,7 +47,7 @@ export class PermissionsController {
    */
   @Get('catalog')
   @HttpCode(HttpStatus.OK)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @RequirePermission('permissions:read')
   @ApiOperation({
     summary: 'Obtener catálogo completo de módulos, features y permisos',
     description:
@@ -93,7 +92,7 @@ export class PermissionsController {
    */
   @Get('roles/:roleId')
   @HttpCode(HttpStatus.OK)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @RequirePermission('role_permissions:read')
   @ApiOperation({ summary: 'Obtener permisos de un rol específico' })
   @ApiOkResponse({ description: 'Permission keys del rol' })
   @ApiNotFoundResponse({ description: 'Rol no encontrado' })
@@ -110,11 +109,11 @@ export class PermissionsController {
    */
   @Put('roles/:roleId')
   @HttpCode(HttpStatus.OK)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @RequirePermission('role_permissions:update')
   @ApiOperation({
     summary: 'Asignar permisos a un rol',
     description:
-      'Reemplaza atómicamente todos los permisos del rol con el nuevo set proporcionado.',
+      'Reemplaza atómicamente todos los permisos del rol con el new set proporcionado.',
   })
   @ApiOkResponse({ description: 'Permisos asignados exitosamente' })
   @ApiNotFoundResponse({ description: 'Rol no encontrado' })

@@ -30,11 +30,10 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -47,8 +46,8 @@ export class EmployeesController {
   // --- RUTAS DE ORGANIZACIÓN ---
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new employee (Org Owner / Org Admin)' })
@@ -59,8 +58,8 @@ export class EmployeesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List employees paginated (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'List of employees paginated.', type: PageDto })
@@ -81,8 +80,8 @@ export class EmployeesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get an employee by ID (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Employee details.' })
@@ -93,8 +92,8 @@ export class EmployeesController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Update an employee (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Employee updated successfully.' })
@@ -105,8 +104,8 @@ export class EmployeesController {
   }
 
   @Patch(':id/toggle-active')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Toggle employee active status (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Employee active status updated.' })
@@ -117,8 +116,8 @@ export class EmployeesController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Update employment status (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Employment status updated.' })
@@ -129,8 +128,8 @@ export class EmployeesController {
   }
 
   @Patch(':id/assign-user')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Assign or unlink a system user to this employee (Org Owner / Org Admin)',
@@ -144,8 +143,8 @@ export class EmployeesController {
   }
 
   @Post(':id/notes')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:update')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Append a note to employee (Org Owner / Org Admin)' })
@@ -157,8 +156,8 @@ export class EmployeesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('employees:delete')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete an employee (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Employee deleted successfully.' })

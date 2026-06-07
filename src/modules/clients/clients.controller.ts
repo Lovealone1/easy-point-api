@@ -7,11 +7,10 @@ import { ToggleClientActiveDto } from './dto/toggle-client-active.dto.js';
 import { AddClientNoteDto } from './dto/add-client-note.dto.js';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiTooManyRequestsResponse, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -22,8 +21,8 @@ export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('clients:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new client (Org Owner / Org Admin)' })
@@ -34,8 +33,8 @@ export class ClientsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('clients:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List clients paginated (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'List of clients paginated.', type: PageDto })
@@ -55,8 +54,8 @@ export class ClientsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('clients:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get a client by ID (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Client details.' })
@@ -67,8 +66,8 @@ export class ClientsController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('clients:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Update a client (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Client updated successfully.' })
@@ -79,8 +78,8 @@ export class ClientsController {
   }
 
   @Patch(':id/toggle-active')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('clients:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Toggle client active status (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Client status updated successfully.' })
@@ -91,8 +90,8 @@ export class ClientsController {
   }
 
   @Post(':id/notes')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('clients:update')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Append a note to client (Org Owner / Org Admin)' })
@@ -104,8 +103,8 @@ export class ClientsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('clients:delete')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete a client (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Client deleted successfully.' })
