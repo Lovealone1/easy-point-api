@@ -24,10 +24,9 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Role } from '../../common/enums/role.enum.js';
 
 @ApiTags('Organization Configs')
 @ApiBearerAuth()
@@ -36,8 +35,8 @@ export class OrganizationConfigsController {
   constructor(private readonly configsService: OrganizationConfigsService) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR, Role.USER)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('organization_configs:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get organization config (Any Org Role)' })
   @ApiOkResponse({ description: 'Configuration retrieved.' })
@@ -46,8 +45,8 @@ export class OrganizationConfigsController {
   }
 
   @Patch()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('organization_configs:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Update organization config (Org Owner / Org Admin)',
@@ -58,8 +57,8 @@ export class OrganizationConfigsController {
   }
 
   @Post('logo')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('organization_configs:update')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file'))
@@ -75,8 +74,8 @@ export class OrganizationConfigsController {
   }
 
   @Delete('logo')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('organization_configs:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete organization logo (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Logo deleted and config updated.' })
@@ -85,8 +84,8 @@ export class OrganizationConfigsController {
   }
 
   @Post('logo-short')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('organization_configs:update')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file'))
@@ -102,8 +101,8 @@ export class OrganizationConfigsController {
   }
 
   @Delete('logo-short')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('organization_configs:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete organization short logo (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Short logo deleted and config updated.' })

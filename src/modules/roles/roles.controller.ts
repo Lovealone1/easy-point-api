@@ -28,16 +28,14 @@ import { CreateRoleDto } from './dto/create-role.dto.js';
 import { UpdateRoleDto } from './dto/update-role.dto.js';
 import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
 
 @ApiTags('Roles')
 @ApiSecurity('x-organization-id')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, OrgRolesGuard)
-@OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
@@ -51,6 +49,7 @@ export class RolesController {
   }
 
   @Post()
+  @RequirePermission('roles:create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new custom role for the organization' })
   @ApiCreatedResponse({ description: 'Role created successfully' })
@@ -60,6 +59,7 @@ export class RolesController {
   }
 
   @Get()
+  @RequirePermission('roles:read')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get all roles (including system defaults) for the organization' })
   @ApiOkResponse({ description: 'List of roles' })
@@ -68,6 +68,7 @@ export class RolesController {
   }
 
   @Get(':id')
+  @RequirePermission('roles:read')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get a specific role by ID' })
   @ApiOkResponse({ description: 'Role found' })
@@ -77,6 +78,7 @@ export class RolesController {
   }
 
   @Patch(':id')
+  @RequirePermission('roles:update')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update a custom role' })
   @ApiOkResponse({ description: 'Role updated successfully' })
@@ -91,6 +93,7 @@ export class RolesController {
   }
 
   @Delete(':id')
+  @RequirePermission('roles:delete')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a custom role' })
   @ApiOkResponse({ description: 'Role deleted successfully' })

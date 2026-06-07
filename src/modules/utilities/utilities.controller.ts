@@ -11,11 +11,10 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -40,8 +39,8 @@ export class UtilitiesController {
   // ── Org routes — declared before :id to avoid routing conflict ──────────────
 
   @Get('summary')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sale_utilities:read_summary')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Aggregated utility summary (Owner / Admin / Collaborator)',
@@ -58,8 +57,8 @@ export class UtilitiesController {
   }
 
   @Get('by-product')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sale_item_utilities:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Utility grouped by product (Owner / Admin / Collaborator)',
@@ -74,8 +73,8 @@ export class UtilitiesController {
   }
 
   @Get('by-category')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sale_item_utilities:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Utility grouped by product category (Owner / Admin / Collaborator)',
@@ -90,8 +89,8 @@ export class UtilitiesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sale_utilities:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Paginated list of sale utilities (Owner / Admin / Collaborator)',
@@ -105,8 +104,8 @@ export class UtilitiesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sale_utilities:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get sale utility by ID (Owner / Admin / Collaborator)' })
   @ApiOkResponse({ description: 'SaleUtility with embedded SaleItemUtility lines.' })

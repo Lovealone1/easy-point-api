@@ -23,9 +23,8 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
 @ApiTags('Supply Stock Entries')
@@ -40,8 +39,8 @@ export class SupplyStockEntriesController {
    * También expuesto para corrección manual.
    */
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_stock_entries:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Registrar un lote físico de insumo en stock (Owner / Admin)' })
@@ -56,8 +55,8 @@ export class SupplyStockEntriesController {
    * Lista paginada de lotes (uso interno / UI de administración).
    */
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_stock_entries:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Listar lotes físicos de insumos (paginado)' })
   @ApiOkResponse({ type: PageDto })
@@ -70,8 +69,8 @@ export class SupplyStockEntriesController {
    * GET /supply-stock-entries/:id
    */
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_stock_entries:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Obtener lote físico por ID' })
   @ApiOkResponse({ description: 'Lote encontrado.' })
@@ -87,8 +86,8 @@ export class SupplyStockEntriesController {
    * de la organización que no tengan ningún entry registrado.
    */
   @Post('initialize-missing')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_stock_entries:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
