@@ -134,3 +134,12 @@ pnpm prisma db seed
 ```
 
 El script de semilla (`seed.ts`) utiliza la operación `upsert` para que la actualización sea segura: no alterará ni duplicará permisos existentes ni afectará las asignaciones previas de roles custom.
+
+---
+
+## 6. Creación de Roles de Sistema por Organización
+
+Para garantizar la existencia de los roles de sistema en cada organización creada:
+
+* Cuando se crea un nuevo tenant (Organización) a través de `OrganizationsRepository.create()`, se insertan automáticamente los roles `OWNER` y `ADMINISTRATOR` en la base de datos de manera anidada.
+* Estos roles se configuran con `isSystemDefault: true`, lo que asegura el bypass automático del guard de seguridad (`PermissionsGuard`).

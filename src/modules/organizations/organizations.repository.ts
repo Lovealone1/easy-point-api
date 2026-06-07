@@ -19,7 +19,25 @@ export class OrganizationsRepository {
   async create(
     data: Prisma.OrganizationCreateInput,
   ): Promise<OrganizationEntity> {
-    const raw = await this.prisma.organization.create({ data });
+    const raw = await this.prisma.organization.create({
+      data: {
+        ...data,
+        roles: {
+          create: [
+            {
+              name: 'OWNER',
+              description: 'Rol Propietario de la Organización',
+              isSystemDefault: true,
+            },
+            {
+              name: 'ADMINISTRATOR',
+              description: 'Rol Administrador de la Organización',
+              isSystemDefault: true,
+            },
+          ],
+        },
+      },
+    });
     return OrganizationEntity.fromPrisma(raw);
   }
 
