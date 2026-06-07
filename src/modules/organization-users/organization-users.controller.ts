@@ -27,21 +27,20 @@ import {
   ApiSecurity,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
 @ApiTags('Organization Users')
 @ApiBearerAuth()
 @ApiSecurity('x-organization-id')
-@UseGuards(JwtAuthGuard, OrgRolesGuard)
-@OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('organization-users')
 export class OrganizationUsersController {
   constructor(private readonly organizationUsersService: OrganizationUsersService) {}
 
   @Post()
+  @RequirePermission('organization_users:change_role')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Assign a user to an organization (Admin / Org Owner / Org Admin)' })
   @ApiCreatedResponse({ description: 'User successfully assigned to organization.' })
@@ -52,6 +51,7 @@ export class OrganizationUsersController {
   }
 
   @Get()
+  @RequirePermission('organization_users:read')
   @ApiOperation({ summary: 'List all members of an organization paginated (Admin / Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'List of all users in the organization paginated.', type: PageDto })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
@@ -62,6 +62,7 @@ export class OrganizationUsersController {
   }
 
   @Patch(':id')
+  @RequirePermission('organization_users:change_role')
   @ApiOperation({ summary: 'Modify the role of an organization user (Admin / Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Role successfully modified.' })
   @ApiConflictResponse({ description: 'An OWNER already exists.' })
@@ -75,6 +76,7 @@ export class OrganizationUsersController {
   }
 
   @Delete(':id')
+  @RequirePermission('organization_users:remove')
   @ApiOperation({ summary: 'Remove a user from an organization (Admin / Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'User successfully removed from the organization.' })
   @ApiNotFoundResponse({ description: 'Association not found.' })

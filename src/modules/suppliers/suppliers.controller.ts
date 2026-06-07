@@ -28,11 +28,10 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -45,8 +44,8 @@ export class SuppliersController {
   // --- RUTAS DE ORGANIZACIÓN ---
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('suppliers:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new supplier (Org Owner / Org Admin)' })
@@ -57,8 +56,8 @@ export class SuppliersController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('suppliers:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List suppliers paginated (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'List of suppliers paginated.', type: PageDto })
@@ -79,8 +78,8 @@ export class SuppliersController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('suppliers:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get a supplier by ID (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Supplier details.' })
@@ -91,8 +90,8 @@ export class SuppliersController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('suppliers:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Update a supplier (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Supplier updated successfully.' })
@@ -103,8 +102,8 @@ export class SuppliersController {
   }
 
   @Patch(':id/toggle-active')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('suppliers:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Toggle supplier active status (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Supplier status updated successfully.' })
@@ -115,8 +114,8 @@ export class SuppliersController {
   }
 
   @Post(':id/notes')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('suppliers:update')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Append a note to supplier (Org Owner / Org Admin)' })
@@ -128,8 +127,8 @@ export class SuppliersController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('suppliers:delete')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete a supplier (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Supplier deleted successfully.' })

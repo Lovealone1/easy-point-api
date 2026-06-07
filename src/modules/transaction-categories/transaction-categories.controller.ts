@@ -12,11 +12,10 @@ import {
   ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -37,8 +36,8 @@ export class TransactionCategoriesController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('transaction_categories:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create (Org Owner / Org Admin)' })
@@ -49,8 +48,8 @@ export class TransactionCategoriesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR, Role.USER)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('transaction_categories:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List paginated (All Org Roles)' })
   @ApiOkResponse({ type: PageDto })
@@ -60,8 +59,8 @@ export class TransactionCategoriesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR, Role.USER)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('transaction_categories:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get by ID (All Org Roles)' })
   @ApiOkResponse({ description: 'Record found.' })
@@ -72,8 +71,8 @@ export class TransactionCategoriesController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('transaction_categories:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Update (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Updated successfully.' })
@@ -84,8 +83,8 @@ export class TransactionCategoriesController {
   }
 
   @Patch(':id/toggle-active')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('transaction_categories:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Toggle active status (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Status updated.' })
@@ -96,8 +95,8 @@ export class TransactionCategoriesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('transaction_categories:delete')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Deleted successfully.' })

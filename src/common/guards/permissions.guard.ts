@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { REQUIRE_PERMISSION_KEY } from '../decorators/require-permission.decorator.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { GlobalRole } from '@prisma/client';
+import { GlobalRole, OrganizationStatus } from '@prisma/client';
 import { Role } from '../enums/role.enum.js';
 import { getTenantId } from '../context/tenant.context.js';
 
@@ -64,18 +64,29 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('Contexto de organización no encontrado');
     }
 
-    // Cargar el orgUser con su rol
+    // Cargar el orgUser con su rol e información de la organización
     const orgUser = await this.prisma.organizationUser.findUnique({
       where: { userId_organizationId: { userId, organizationId } },
       include: {
         role: {
           select: { name: true, isSystemDefault: true },
         },
+        organization: {
+          select: { status: true, isActive: true },
+        },
       },
     });
 
-    if (!orgUser) {
+    if (!orgUser || !orgUser.organization) {
       throw new ForbiddenException('No perteneces a esta organización');
+    }
+
+    // Validar que la organización esté activa
+    if (
+      orgUser.organization.status !== OrganizationStatus.ACTIVE ||
+      !orgUser.organization.isActive
+    ) {
+      throw new ForbiddenException('Esta organización está actualmente inactiva o suspendida');
     }
 
     // 2. Bypass: Roles sistema (OWNER, ADMINISTRATOR)

@@ -27,11 +27,11 @@ import { InvitationsService } from './invitations.service.js';
 import { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
-import { Role } from '../../common/enums/role.enum.js';
+
 @ApiTags('Invitations')
 @ApiSecurity('x-organization-id')
 @Controller('invitations')
@@ -41,8 +41,8 @@ export class InvitationsController {
   // ── POST /invitations ───────────────────────────────────────────────────────
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('invitations:create')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create invitation',
@@ -68,8 +68,8 @@ export class InvitationsController {
   // ── GET /invitations ────────────────────────────────────────────────────────
   @Get()
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('invitations:read')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get all invitations for the active organization',
@@ -136,8 +136,8 @@ export class InvitationsController {
   // ── DELETE /invitations/:id ──────────────────────────────────────────────────
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('invitations:cancel')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete a pending invitation',

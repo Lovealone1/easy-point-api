@@ -30,12 +30,11 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -60,8 +59,8 @@ export class SalesController {
   // ── Org routes ──────────────────────────────────────────────────────────────
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sales:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -85,8 +84,8 @@ export class SalesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sales:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List sales paginated (Owner / Admin / Collaborator)' })
   @ApiOkResponse({ type: PageDto })
@@ -96,8 +95,8 @@ export class SalesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sales:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get sale by ID (Owner / Admin / Collaborator)' })
   @ApiOkResponse({ description: 'Record found.' })
@@ -108,8 +107,8 @@ export class SalesController {
   }
 
   @Patch(':id/complete')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sales:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Complete a PENDING sale / dispatch a quote (Owner / Admin)',
@@ -133,8 +132,8 @@ export class SalesController {
   }
 
   @Patch(':id/items')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sales:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Add items to a PENDING sale / quote (Owner / Admin / Collaborator)',
@@ -157,8 +156,8 @@ export class SalesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('sales:delete')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({

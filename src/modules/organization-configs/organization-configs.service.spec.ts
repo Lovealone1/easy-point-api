@@ -4,6 +4,7 @@ import { OrganizationConfigsService } from './organization-configs.service.js';
 import { OrganizationConfigsRepository } from './organization-configs.repository.js';
 import { StorageService } from '../../infraestructure/storage/storage.service.js';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
 import * as tenantContext from '../../common/context/tenant.context.js';
 import { OrganizationConfigEntity } from './domain/organization-config.entity.js';
 import { Theme } from '@prisma/client';
@@ -15,6 +16,7 @@ describe('OrganizationConfigsService', () => {
   let repository: jest.Mocked<OrganizationConfigsRepository>;
   let storageService: jest.Mocked<StorageService>;
   let redisCacheService: jest.Mocked<RedisCacheService>;
+  let prismaService: any;
 
   const mockOrgId = 'org-123';
   const mockDate = new Date();
@@ -72,6 +74,12 @@ describe('OrganizationConfigsService', () => {
             delete: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: PrismaService,
+          useValue: {
+            organization: { update: jest.fn() },
+          },
+        },
       ],
     }).compile();
 
@@ -83,6 +91,7 @@ describe('OrganizationConfigsService', () => {
     ) as jest.Mocked<OrganizationConfigsRepository>;
     storageService = module.get(StorageService) as jest.Mocked<StorageService>;
     redisCacheService = module.get(RedisCacheService) as jest.Mocked<RedisCacheService>;
+    prismaService = module.get(PrismaService);
   });
 
   describe('getConfig', () => {

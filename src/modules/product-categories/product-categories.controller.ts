@@ -27,9 +27,8 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
 @ApiTags('Product Categories')
@@ -41,8 +40,8 @@ export class ProductCategoriesController {
   // --- RUTAS DE ORGANIZACIÓN ---
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('product_categories:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create product category (Org Owner / Org Admin)' })
@@ -53,8 +52,8 @@ export class ProductCategoriesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('product_categories:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List product categories paginated (Org Owner / Org Admin)' })
   @ApiOkResponse({ type: PageDto })
@@ -64,8 +63,8 @@ export class ProductCategoriesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('product_categories:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get product category by ID (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Category found.' })
@@ -76,8 +75,8 @@ export class ProductCategoriesController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('product_categories:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Update product category (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Category updated successfully.' })
@@ -91,8 +90,8 @@ export class ProductCategoriesController {
   }
 
   @Patch(':id/toggle-active')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('product_categories:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Toggle active status (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Status updated.' })
@@ -106,8 +105,8 @@ export class ProductCategoriesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('product_categories:delete')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete product category (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Category deleted successfully.' })

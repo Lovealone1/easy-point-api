@@ -31,11 +31,10 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -60,8 +59,8 @@ export class ProductsController {
   // --- RUTAS DE ORGANIZACIÓN ---
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -76,8 +75,8 @@ export class ProductsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List products paginated (Org Owner / Org Admin)' })
   @ApiOkResponse({ type: PageDto })
@@ -87,8 +86,8 @@ export class ProductsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get product by ID (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Product found.' })
@@ -99,8 +98,8 @@ export class ProductsController {
   }
 
   @Get(':id/barcode')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Get product barcode as PNG (Org Owner / Org Admin)',
@@ -122,8 +121,8 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Update product (Org Owner / Org Admin)',
@@ -137,8 +136,8 @@ export class ProductsController {
   }
 
   @Patch(':id/toggle-active')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:update')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Toggle active status (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Status updated.' })
@@ -152,8 +151,8 @@ export class ProductsController {
   }
 
   @Post(':id/notes')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:update')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Add note to product (Org Owner / Org Admin)' })
@@ -165,8 +164,8 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('products:delete')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Delete product (Org Owner / Org Admin)' })
   @ApiOkResponse({ description: 'Product deleted.' })

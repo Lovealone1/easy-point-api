@@ -14,11 +14,10 @@ import {
   ApiConsumes, ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -40,13 +39,13 @@ export class BankAccountsController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Create (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Create (Org Owner / Org Admin / Dynamic Role)' })
   @ApiCreatedResponse({ description: 'Created successfully.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
   create(
@@ -57,10 +56,10 @@ export class BankAccountsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:read')
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'List paginated (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'List paginated (Org Owner / Org Admin / Dynamic Role)' })
   @ApiOkResponse({ type: PageDto })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
   findAll(@Query() findOptionsDto: FindBankAccountsDto) {
@@ -68,10 +67,10 @@ export class BankAccountsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:read')
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'Get by ID (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Get by ID (Org Owner / Org Admin / Dynamic Role)' })
   @ApiOkResponse({ description: 'Record found.' })
   @ApiNotFoundResponse({ description: 'Not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
@@ -80,10 +79,10 @@ export class BankAccountsController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:update')
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'Update (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Update (Org Owner / Org Admin / Dynamic Role)' })
   @ApiOkResponse({ description: 'Updated successfully.' })
   @ApiNotFoundResponse({ description: 'Not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
@@ -92,10 +91,10 @@ export class BankAccountsController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:update')
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'Change status (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Change status (Org Owner / Org Admin / Dynamic Role)' })
   @ApiOkResponse({ description: 'Status updated.' })
   @ApiNotFoundResponse({ description: 'Not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
@@ -104,8 +103,8 @@ export class BankAccountsController {
   }
 
   @Post(':id/qrcode')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:update')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file'))
@@ -114,7 +113,7 @@ export class BankAccountsController {
     description: 'QR Code file (WEBP, JPG, JPEG, PNG)',
     type: UploadQrCodeDto,
   })
-  @ApiOperation({ summary: 'Upload QR code for bank account (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Upload QR code for bank account (Org Owner / Org Admin / Dynamic Role)' })
   @ApiOkResponse({ description: 'QR code uploaded successfully.' })
   @ApiNotFoundResponse({ description: 'Not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
@@ -126,10 +125,10 @@ export class BankAccountsController {
   }
 
   @Delete(':id/qrcode')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:update')
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'Delete QR code for bank account (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Delete QR code for bank account (Org Owner / Org Admin / Dynamic Role)' })
   @ApiOkResponse({ description: 'QR code deleted successfully.' })
   @ApiNotFoundResponse({ description: 'Not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
@@ -138,10 +137,10 @@ export class BankAccountsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('bank_accounts:delete')
   @ApiSecurity('x-organization-id')
-  @ApiOperation({ summary: 'Delete (Org Owner / Org Admin)' })
+  @ApiOperation({ summary: 'Delete (Org Owner / Org Admin / Dynamic Role)' })
   @ApiOkResponse({ description: 'Deleted successfully.' })
   @ApiNotFoundResponse({ description: 'Not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })

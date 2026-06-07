@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { BadRequestException } from '@nestjs/common';
 import { RolesController } from './roles.controller.js';
 import { RolesService } from './roles.service.js';
@@ -49,7 +49,7 @@ describe('RolesController', () => {
       ],
     })
     .overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })
-    .overrideGuard(OrgRolesGuard).useValue({ canActivate: () => true })
+    .overrideGuard(PermissionsGuard).useValue({ canActivate: () => true })
     .compile();
 
     controller = module.get<RolesController>(RolesController);

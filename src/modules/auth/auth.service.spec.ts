@@ -6,6 +6,7 @@ import { RedisCacheService } from '../../infraestructure/redis/redis-cache.servi
 import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { AuditService } from '../../infraestructure/audit/audit.service.js';
+import { StorageService } from '../../infraestructure/storage/storage.service.js';
 import appConfig from '../../common/config/config.js';
 import * as argon2 from 'argon2';
 import { AuthIntent } from './enums/auth-intent.enum.js';
@@ -67,6 +68,14 @@ describe('AuthService', () => {
         {
           provide: AuditService,
           useValue: { log: jest.fn() },
+        },
+        {
+          provide: StorageService,
+          useValue: {
+            uploadFile: jest.fn(),
+            getPresignedUrl: jest.fn(),
+            deleteFile: jest.fn(),
+          },
         },
       ],
     }).compile();

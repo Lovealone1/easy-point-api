@@ -30,12 +30,11 @@ import {
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { OrgRolesGuard } from '../../common/guards/org-roles.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { OrgRoles } from '../../common/decorators/org-roles.decorator.js';
+import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
-import { Role } from '../../common/enums/role.enum.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
 
@@ -60,8 +59,8 @@ export class SupplyPurchasesController {
   // ── Org routes ──────────────────────────────────────────────────────────────
 
   @Post()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_purchases:create')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -84,8 +83,8 @@ export class SupplyPurchasesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_purchases:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'List supply purchases paginated (Owner / Admin / Collaborator)' })
   @ApiOkResponse({ type: PageDto })
@@ -95,8 +94,8 @@ export class SupplyPurchasesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_purchases:read')
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get supply purchase by ID (Owner / Admin / Collaborator)' })
   @ApiOkResponse({ description: 'Record found.' })
@@ -107,8 +106,8 @@ export class SupplyPurchasesController {
   }
 
   @Patch(':id/complete')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_purchases:create')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Complete a PENDING purchase (Owner / Admin)',
@@ -131,8 +130,8 @@ export class SupplyPurchasesController {
   }
 
   @Patch(':id/items')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR, Role.COLLABORATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_purchases:create')
   @ApiSecurity('x-organization-id')
   @ApiOperation({
     summary: 'Add items to a PENDING purchase (Owner / Admin / Collaborator)',
@@ -154,8 +153,8 @@ export class SupplyPurchasesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, OrgRolesGuard)
-  @OrgRoles(Role.OWNER, Role.ADMINISTRATOR)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission('supply_purchases:delete')
   @ApiSecurity('x-organization-id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
