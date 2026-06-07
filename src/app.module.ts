@@ -40,6 +40,8 @@ import { AuditModule } from './infraestructure/audit/audit.module.js';
 import { DiscountRulesModule } from './modules/discount-rules/discount-rules.module.js';
 import { StorageModule } from './infraestructure/storage/storage.module.js';
 import { OrganizationConfigsModule } from './modules/organization-configs/organization-configs.module.js';
+import { PermissionsModule } from './modules/permissions/permissions.module.js';
+import { SystemModulesModule } from './modules/system-modules/system-modules.module.js';
 
 @Module({
   imports: [
@@ -92,6 +94,8 @@ import { OrganizationConfigsModule } from './modules/organization-configs/organi
     ProductionsModule,
     CronModule,
     RolesModule,
+    PermissionsModule,
+    SystemModulesModule,
     DiscountRulesModule,
   ],
   controllers: [],
