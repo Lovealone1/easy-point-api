@@ -946,9 +946,9 @@ model Role {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  users       OrganizationUser[]
-  invitations Invitation[]
-  permissions RolePermission[]
+  users           OrganizationUser[]
+  invitations     Invitation[]
+  rolePermissions RolePermission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -957,49 +957,91 @@ model Role {
   @@map("roles")
 }
 
+// ─── Tipos de permiso ────────────────────────────────────────────────────────
+
+enum PermissionType {
+  CRUD   // create, read, update, delete sobre un recurso
+  ACTION // acciones de negocio específicas (cancel, approve, complete)
+  VIEW   // visibilidad de datos sensibles (costos, salarios, crédito)
+  UI     // control de elementos visuales (botones, tabs, columnas)
+}
+
+// ─── Catálogo de módulos — seed data, inmutable en runtime ───────────────────
+
 model Module {
   id          String  @id @default(uuid())
-  name        String  @unique
+  key         String  @unique // ej: "sales", "inventory", "employees"
+  name        String          // ej: "Ventas", "Inventario"
   description String?
+  icon        String?         // nombre del icono para el UI
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
 
-  permissions Permission[]
+  features Feature[]
 
   @@map("modules")
 }
 
-model Permission {
-  id       String @id @default(uuid())
-  moduleId String
-  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+// ─── Features dentro de un módulo — seed data ─────────────────────────────────
 
-  resource    String
-  action      String
+model Feature {
+  id          String  @id @default(uuid())
+  moduleId    String
+  module      Module  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  key         String  @unique // ej: "sales.management", "sales.reports"
+  name        String          // ej: "Gestión de Ventas"
   description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  permissions Permission[]
+
+  @@index([moduleId])
+  @@map("features")
+}
+
+// ─── Catálogo de permisos atómicos — seed data, referenciados por key ─────────
+
+model Permission {
+  id        String  @id @default(uuid())
+  featureId String
+  feature   Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  key         String         @unique // ej: "sales:create", "employees:view_salary"
+  name        String                 // ej: "Crear venta"
+  description String?
+  type        PermissionType         // CRUD | ACTION | VIEW | UI
+  sortOrder   Int            @default(0)
+  isActive    Boolean        @default(true)
 
   rolePermissions RolePermission[]
 
-  @@unique([resource, action])
+  @@index([featureId])
   @@map("permissions")
 }
+
+// ─── Asignación dinámica de permisos a roles (por organización) ──────────────
 
 model RolePermission {
   id String @id @default(uuid())
 
-  // Para permisos de Organización
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  roleId String?
-  role   Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  // Para permisos Globales del Sistema
-  globalRole GlobalRole?
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   permissionId String
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
+  // Denormalizado para queries eficientes sin join adicional a Role
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  grantedAt DateTime @default(now())
+
   @@unique([roleId, permissionId])
-  @@unique([globalRole, permissionId])
+  @@index([organizationId])
+  @@index([roleId])
+  @@index([permissionId])
   @@map("role_permissions")
 }
 
