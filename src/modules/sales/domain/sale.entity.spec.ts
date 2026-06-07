@@ -25,9 +25,9 @@ describe('SaleEntity', () => {
     expect(entity.id).toBe(mockRawData.id);
     expect(entity.organizationId).toBe(mockRawData.organizationId);
     expect(entity.clientId).toBe(mockRawData.clientId);
-    expect(entity.subtotalAmount).toEqual(mockRawData.subtotalAmount);
-    expect(entity.discountAmount).toEqual(mockRawData.discountAmount);
-    expect(entity.totalAmount).toEqual(mockRawData.totalAmount);
+    expect(entity.subtotalAmount).toBe(100);
+    expect(entity.discountAmount).toBe(10);
+    expect(entity.totalAmount).toBe(90);
     expect(entity.transactionId).toBe(mockRawData.transactionId);
     expect(entity.status).toBe(mockRawData.status);
     expect(entity.notes).toBe(mockRawData.notes);
@@ -55,7 +55,7 @@ describe('SaleEntity', () => {
     expect(entity.transactionId).toBeNull();
     expect(entity.notes).toBeNull();
     expect(entity.performedByUserId).toBeNull();
-    expect(entity.totalAmount).toEqual(mockRawData.totalAmount); // Still required
+    expect(entity.totalAmount).toBe(90); // Still required
   });
 
   it('should create from Prisma raw object via fromPrisma', () => {
