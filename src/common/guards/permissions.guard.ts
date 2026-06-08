@@ -89,6 +89,31 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('Esta organización está actualmente inactiva o suspendida');
     }
 
+    // Verificar que los módulos correspondientes a los permisos requeridos estén habilitados para la org
+    const enabledModulesCount = await this.prisma.permission.count({
+      where: {
+        key: { in: requiredKeys },
+        isActive: true,
+        feature: {
+          isActive: true,
+          module: {
+            isActive: true,
+            organizationModules: {
+              some: {
+                organizationId,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (enabledModulesCount < requiredKeys.length) {
+      throw new ForbiddenException(
+        'Uno o más módulos requeridos para esta acción no están habilitados en su organización',
+      );
+    }
+
     // 2. Bypass: Roles sistema (OWNER, ADMINISTRATOR)
     if (
       orgUser.role.isSystemDefault &&

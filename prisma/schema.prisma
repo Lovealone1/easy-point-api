@@ -100,6 +100,7 @@ model Organization {
   rolePermissions       RolePermission[]
   discountRules         DiscountRule[]
   appliedDiscounts      AppliedDiscount[]
+  organizationModules   OrganizationModule[]
 
   @@map("organizations")
 }
@@ -978,6 +979,7 @@ model Module {
   isActive    Boolean @default(true)
 
   features Feature[]
+  organizationModules OrganizationModule[]
 
   @@map("modules")
 }
@@ -1203,4 +1205,19 @@ model AppliedDiscount {
   @@index([discountRuleId])
   @@index([createdAt])
   @@map("applied_discounts")
+}
+
+model OrganizationModule {
+  id             String   @id @default(uuid())
+  organizationId String
+  moduleId       String
+  assignedAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  module       Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, moduleId])
+  @@index([organizationId])
+  @@index([moduleId])
+  @@map("organization_modules")
 }

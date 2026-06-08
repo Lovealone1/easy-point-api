@@ -38,6 +38,7 @@ describe('RolesService', () => {
       findByNameAndOrg: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      getRoleCountAndPlan: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -59,7 +60,8 @@ describe('RolesService', () => {
   });
 
   describe('create', () => {
-    it('should successfully create a role if name is unique', async () => {
+    it('should successfully create a role if name is unique and within limit (FREE: count 1 < 2)', async () => {
+      repository.getRoleCountAndPlan.mockResolvedValue({ count: 1, plan: 'FREE' as any });
       repository.findByNameAndOrg.mockResolvedValue(null);
       repository.create.mockResolvedValue(mockRoleEntity);
 
@@ -68,6 +70,7 @@ describe('RolesService', () => {
         description: 'A custom role',
       });
 
+      expect(repository.getRoleCountAndPlan).toHaveBeenCalledWith('org-1');
       expect(repository.findByNameAndOrg).toHaveBeenCalledWith('CUSTOM_ROLE', 'org-1');
       expect(repository.create).toHaveBeenCalledWith({
         organizationId: 'org-1',
@@ -78,7 +81,52 @@ describe('RolesService', () => {
       expect(result).toEqual(mockRoleEntity);
     });
 
+    it('should throw BadRequestException if roles limit reached for FREE plan (count 2 >= 2)', async () => {
+      repository.getRoleCountAndPlan.mockResolvedValue({ count: 2, plan: 'FREE' as any });
+
+      await expect(
+        service.create('org-1', { name: 'CUSTOM_ROLE' }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('should successfully create a custom role for BASIC plan if count is 2 (< 3)', async () => {
+      repository.getRoleCountAndPlan.mockResolvedValue({ count: 2, plan: 'BASIC' as any });
+      repository.findByNameAndOrg.mockResolvedValue(null);
+      repository.create.mockResolvedValue(mockRoleEntity);
+
+      const result = await service.create('org-1', { name: 'CUSTOM_ROLE' });
+      expect(result).toBeDefined();
+    });
+
+    it('should throw BadRequestException if roles limit reached for BASIC plan (count 3 >= 3)', async () => {
+      repository.getRoleCountAndPlan.mockResolvedValue({ count: 3, plan: 'BASIC' as any });
+
+      await expect(
+        service.create('org-1', { name: 'CUSTOM_ROLE' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should successfully create a custom role for PREMIUM plan if count is 4 (< 5)', async () => {
+      repository.getRoleCountAndPlan.mockResolvedValue({ count: 4, plan: 'PREMIUM' as any });
+      repository.findByNameAndOrg.mockResolvedValue(null);
+      repository.create.mockResolvedValue(mockRoleEntity);
+
+      const result = await service.create('org-1', { name: 'CUSTOM_ROLE' });
+      expect(result).toBeDefined();
+    });
+
+    it('should throw BadRequestException if roles limit reached for PREMIUM plan (count 5 >= 5)', async () => {
+      repository.getRoleCountAndPlan.mockResolvedValue({ count: 5, plan: 'PREMIUM' as any });
+
+      await expect(
+        service.create('org-1', { name: 'CUSTOM_ROLE' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('should throw ConflictException if role name already exists', async () => {
+      repository.getRoleCountAndPlan.mockResolvedValue({ count: 1, plan: 'BASIC' as any });
       repository.findByNameAndOrg.mockResolvedValue(mockRoleEntity);
 
       await expect(
