@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma } from '@prisma/client';
+import { Prisma, Plan } from '@prisma/client';
 import { RoleEntity } from './domain/role.entity.js';
 
 @Injectable()
@@ -56,5 +56,24 @@ export class RolesRepository {
   async delete(id: string): Promise<RoleEntity> {
     const raw = await this.prisma.role.delete({ where: { id } });
     return RoleEntity.fromPrisma(raw);
+  }
+
+  async getRoleCountAndPlan(organizationId: string): Promise<{ count: number; plan: Plan }> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        plan: true,
+        _count: {
+          select: { roles: true },
+        },
+      },
+    });
+    if (!org) {
+      throw new Error('Organization not found');
+    }
+    return {
+      count: org._count.roles,
+      plan: org.plan,
+    };
   }
 }

@@ -11,7 +11,7 @@ import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { RoleEntity } from './domain/role.entity.js';
-import { Prisma } from '@prisma/client';
+import { Prisma, Plan } from '@prisma/client';
 
 @Injectable()
 export class RolesService {
@@ -21,6 +21,21 @@ export class RolesService {
     organizationId: string,
     createRoleDto: CreateRoleDto,
   ): Promise<RoleEntity> {
+    // Check organization plan role creation limit
+    const { count, plan } = await this.rolesRepository.getRoleCountAndPlan(organizationId);
+    let limit = 2; // FREE plan allows 0 custom roles (only OWNER and ADMINISTRATOR)
+    if (plan === Plan.BASIC) {
+      limit = 3; // BASIC plan allows 1 custom role (total 3)
+    } else if (plan === Plan.PREMIUM) {
+      limit = 5; // PREMIUM plan allows 3 custom roles (total 5)
+    }
+
+    if (count >= limit) {
+      throw new BadRequestException(
+        `El límite de roles para tu plan actual (${plan}) es de ${limit} roles. Por favor actualiza tu plan para crear más roles.`,
+      );
+    }
+
     // Check if role name already exists in this organization
     const existing = await this.rolesRepository.findByNameAndOrg(
       createRoleDto.name,

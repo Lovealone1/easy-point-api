@@ -114,6 +114,56 @@ async function main() {
     orgsInitialized++;
   }
 
+  console.log('\n🌱 Wiring default permissions for OWNER and ADMINISTRATOR roles in all organizations...');
+  const allOrgs = await prisma.organization.findMany();
+  const allPermissions = await prisma.permission.findMany({ where: { isActive: true } });
+
+  let rolesWired = 0;
+  for (const org of allOrgs) {
+    const roles = await prisma.role.findMany({
+      where: { organizationId: org.id },
+    });
+
+    const ownerRole = roles.find((r) => r.name === 'OWNER');
+    const adminRole = roles.find((r) => r.name === 'ADMINISTRATOR');
+
+    if (ownerRole) {
+      const exists = await prisma.rolePermission.count({
+        where: { roleId: ownerRole.id },
+      });
+      if (exists === 0) {
+        console.log(`  🔑 Wiring OWNER role permissions for organization '${org.name}'...`);
+        await prisma.rolePermission.createMany({
+          data: allPermissions.map((p) => ({
+            roleId: ownerRole.id,
+            permissionId: p.id,
+            organizationId: org.id,
+          })),
+        });
+        rolesWired++;
+      }
+    }
+
+    if (adminRole) {
+      const exists = await prisma.rolePermission.count({
+        where: { roleId: adminRole.id },
+      });
+      if (exists === 0) {
+        console.log(`  🔑 Wiring ADMINISTRATOR role permissions for organization '${org.name}'...`);
+        await prisma.rolePermission.createMany({
+          data: allPermissions
+            .filter((p) => !p.key.startsWith('organization_users:'))
+            .map((p) => ({
+              roleId: adminRole.id,
+              permissionId: p.id,
+              organizationId: org.id,
+            })),
+        });
+        rolesWired++;
+      }
+    }
+  }
+
   console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Seed completed:
@@ -121,6 +171,7 @@ async function main() {
    Features:    ${featuresUpserted}
    Permissions: ${permissionsUpserted}
    Orgs Init:   ${orgsInitialized}
+   Roles Wired: ${rolesWired}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   `);
 }

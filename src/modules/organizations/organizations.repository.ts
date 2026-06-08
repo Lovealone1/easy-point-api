@@ -48,6 +48,48 @@ export class OrganizationsRepository {
         },
       },
     });
+
+    // Wire default permissions for OWNER and ADMINISTRATOR roles
+    const createdRoles = await this.prisma.role.findMany({
+      where: { organizationId: raw.id },
+    });
+    const ownerRole = createdRoles.find((r) => r.name === 'OWNER');
+    const adminRole = createdRoles.find((r) => r.name === 'ADMINISTRATOR');
+
+    const allPermissions = await this.prisma.permission.findMany({
+      where: { isActive: true },
+    });
+
+    const rolePermissionsData: Prisma.RolePermissionCreateManyInput[] = [];
+
+    if (ownerRole) {
+      allPermissions.forEach((p) => {
+        rolePermissionsData.push({
+          roleId: ownerRole.id,
+          permissionId: p.id,
+          organizationId: raw.id,
+        });
+      });
+    }
+
+    if (adminRole) {
+      allPermissions
+        .filter((p) => !p.key.startsWith('organization_users:'))
+        .forEach((p) => {
+          rolePermissionsData.push({
+            roleId: adminRole.id,
+            permissionId: p.id,
+            organizationId: raw.id,
+          });
+        });
+    }
+
+    if (rolePermissionsData.length > 0) {
+      await this.prisma.rolePermission.createMany({
+        data: rolePermissionsData,
+      });
+    }
+
     return OrganizationEntity.fromPrisma(raw);
   }
 
