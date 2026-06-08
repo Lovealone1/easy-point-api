@@ -89,12 +89,38 @@ async function main() {
     }
   }
 
+  console.log('\n🌱 Initializing modules for existing organizations...');
+  const organizations = await prisma.organization.findMany();
+  const activeModules = await prisma.module.findMany({ where: { isActive: true } });
+
+  let orgsInitialized = 0;
+  for (const org of organizations) {
+    const assignedCount = await prisma.organizationModule.count({
+      where: { organizationId: org.id },
+    });
+
+    if (assignedCount > 0) {
+      console.log(`  ⚠️ Organization '${org.name}' already has modules initialized. Skipping.`);
+      continue;
+    }
+
+    console.log(`  🚀 Initializing modules for organization '${org.name}'...`);
+    await prisma.organizationModule.createMany({
+      data: activeModules.map((m) => ({
+        organizationId: org.id,
+        moduleId: m.id,
+      })),
+    });
+    orgsInitialized++;
+  }
+
   console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Seed completed:
    Modules:     ${modulesUpserted}
    Features:    ${featuresUpserted}
    Permissions: ${permissionsUpserted}
+   Orgs Init:   ${orgsInitialized}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   `);
 }
