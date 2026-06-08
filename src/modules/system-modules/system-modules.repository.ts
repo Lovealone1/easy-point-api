@@ -106,4 +106,86 @@ export class SystemModulesRepository {
       ),
     );
   }
+
+  /**
+   * Asigna un conjunto de módulos a una organización (idempotente).
+   */
+  async assignModules(organizationId: string, moduleIds: string[]): Promise<void> {
+    await this.prisma.organizationModule.createMany({
+      data: moduleIds.map((moduleId) => ({
+        organizationId,
+        moduleId,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  /**
+   * Desasigna un módulo específico de una organización.
+   */
+  async unassignModule(organizationId: string, moduleId: string): Promise<void> {
+    await this.prisma.organizationModule.deleteMany({
+      where: {
+        organizationId,
+        moduleId,
+      },
+    });
+  }
+
+  /**
+   * Obtiene la lista de módulos asignados a una organización específica.
+   */
+  async getAssignedModules(organizationId: string): Promise<ModuleEntity[]> {
+    const orgModules = await this.prisma.organizationModule.findMany({
+      where: { organizationId },
+      include: {
+        module: {
+          include: {
+            features: {
+              include: {
+                permissions: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        module: {
+          sortOrder: 'asc',
+        },
+      },
+    });
+
+    return orgModules.map((om) =>
+      ModuleEntity.fromPrisma(
+        om.module,
+        om.module.features.map((f) =>
+          FeatureEntity.fromPrisma(
+            f,
+            f.permissions.map(PermissionEntity.fromPrisma),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Obtiene la lista de organizaciones que tienen asignado un módulo específico.
+   */
+  async getOrganizationsByModule(moduleId: string): Promise<any[]> {
+    const orgModules = await this.prisma.organizationModule.findMany({
+      where: { moduleId },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+    return orgModules.map((om) => om.organization);
+  }
 }

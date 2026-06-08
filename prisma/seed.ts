@@ -89,12 +89,89 @@ async function main() {
     }
   }
 
+  console.log('\n🌱 Initializing modules for existing organizations...');
+  const organizations = await prisma.organization.findMany();
+  const activeModules = await prisma.module.findMany({ where: { isActive: true } });
+
+  let orgsInitialized = 0;
+  for (const org of organizations) {
+    const assignedCount = await prisma.organizationModule.count({
+      where: { organizationId: org.id },
+    });
+
+    if (assignedCount > 0) {
+      console.log(`  ⚠️ Organization '${org.name}' already has modules initialized. Skipping.`);
+      continue;
+    }
+
+    console.log(`  🚀 Initializing modules for organization '${org.name}'...`);
+    await prisma.organizationModule.createMany({
+      data: activeModules.map((m) => ({
+        organizationId: org.id,
+        moduleId: m.id,
+      })),
+    });
+    orgsInitialized++;
+  }
+
+  console.log('\n🌱 Wiring default permissions for OWNER and ADMINISTRATOR roles in all organizations...');
+  const allOrgs = await prisma.organization.findMany();
+  const allPermissions = await prisma.permission.findMany({ where: { isActive: true } });
+
+  let rolesWired = 0;
+  for (const org of allOrgs) {
+    const roles = await prisma.role.findMany({
+      where: { organizationId: org.id },
+    });
+
+    const ownerRole = roles.find((r) => r.name === 'OWNER');
+    const adminRole = roles.find((r) => r.name === 'ADMINISTRATOR');
+
+    if (ownerRole) {
+      const exists = await prisma.rolePermission.count({
+        where: { roleId: ownerRole.id },
+      });
+      if (exists === 0) {
+        console.log(`  🔑 Wiring OWNER role permissions for organization '${org.name}'...`);
+        await prisma.rolePermission.createMany({
+          data: allPermissions.map((p) => ({
+            roleId: ownerRole.id,
+            permissionId: p.id,
+            organizationId: org.id,
+          })),
+        });
+        rolesWired++;
+      }
+    }
+
+    if (adminRole) {
+      const exists = await prisma.rolePermission.count({
+        where: { roleId: adminRole.id },
+      });
+      if (exists === 0) {
+        console.log(`  🔑 Wiring ADMINISTRATOR role permissions for organization '${org.name}'...`);
+        await prisma.rolePermission.createMany({
+          data: allPermissions
+            .filter((p) => !p.key.startsWith('organization_users:'))
+            .map((p) => ({
+              roleId: adminRole.id,
+              permissionId: p.id,
+              organizationId: org.id,
+            })),
+        });
+        rolesWired++;
+      }
+    }
+  }
+
   console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Seed completed:
    Modules:     ${modulesUpserted}
    Features:    ${featuresUpserted}
    Permissions: ${permissionsUpserted}
+   Orgs Init:   ${orgsInitialized}
+   Roles Wired: ${rolesWired}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   `);
 }
