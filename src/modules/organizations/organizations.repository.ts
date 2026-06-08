@@ -19,6 +19,11 @@ export class OrganizationsRepository {
   async create(
     data: Prisma.OrganizationCreateInput,
   ): Promise<OrganizationEntity> {
+    const activeModules = await this.prisma.module.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+
     const raw = await this.prisma.organization.create({
       data: {
         ...data,
@@ -35,6 +40,11 @@ export class OrganizationsRepository {
               isSystemDefault: true,
             },
           ],
+        },
+        organizationModules: {
+          create: activeModules.map((m) => ({
+            moduleId: m.id,
+          })),
         },
       },
     });
