@@ -39,6 +39,12 @@ export class RolePermissionsService {
       throw new NotFoundException(`Rol con ID ${roleId} no encontrado`);
     }
 
+    if (role.name === 'OWNER') {
+      throw new BadRequestException(
+        'El rol OWNER tiene permisos globales irrevocables y no puede ser modificado',
+      );
+    }
+
     if (role.isSystemDefault) {
       throw new BadRequestException(
         'No se pueden modificar los permisos de un rol del sistema',
@@ -86,6 +92,12 @@ export class RolePermissionsService {
 
     if (!role) {
       throw new NotFoundException(`Rol con ID ${roleId} no encontrado`);
+    }
+
+    if (role.name === 'OWNER') {
+      throw new BadRequestException(
+        'El rol OWNER tiene permisos globales irrevocables y no puede ser modificado',
+      );
     }
 
     if (role.isSystemDefault) {

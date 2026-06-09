@@ -21,6 +21,13 @@ describe('RolePermissionsService', () => {
     isSystemDefault: true,
   };
 
+  const mockAdminRole = {
+    id: 'role-admin',
+    organizationId: 'org-1',
+    name: 'ADMINISTRATOR',
+    isSystemDefault: true,
+  };
+
   const mockPermission = {
     id: 'perm-1',
     key: 'sales:create',
@@ -105,12 +112,30 @@ describe('RolePermissionsService', () => {
       expect(repository.assignPermission).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException if role is system default', async () => {
+    it('should throw BadRequestException if role is OWNER', async () => {
       repository.findRoleByIdAndOrg.mockResolvedValue(mockSystemRole as any);
 
       await expect(
         service.assignPermission('role-system', 'perm-1', 'org-1'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(
+        new BadRequestException(
+          'El rol OWNER tiene permisos globales irrevocables y no puede ser modificado',
+        ),
+      );
+
+      expect(repository.assignPermission).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if role is another system default', async () => {
+      repository.findRoleByIdAndOrg.mockResolvedValue(mockAdminRole as any);
+
+      await expect(
+        service.assignPermission('role-admin', 'perm-1', 'org-1'),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'No se pueden modificar los permisos de un rol del sistema',
+        ),
+      );
 
       expect(repository.assignPermission).not.toHaveBeenCalled();
     });
@@ -144,12 +169,30 @@ describe('RolePermissionsService', () => {
       expect(repository.revokePermission).toHaveBeenCalledWith('role-1', 'perm-1');
     });
 
-    it('should throw BadRequestException if trying to revoke from system default role', async () => {
+    it('should throw BadRequestException if trying to revoke from OWNER role', async () => {
       repository.findRoleByIdAndOrg.mockResolvedValue(mockSystemRole as any);
 
       await expect(
         service.revokePermission('role-system', 'perm-1', 'org-1'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(
+        new BadRequestException(
+          'El rol OWNER tiene permisos globales irrevocables y no puede ser modificado',
+        ),
+      );
+
+      expect(repository.revokePermission).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if trying to revoke from another system default role', async () => {
+      repository.findRoleByIdAndOrg.mockResolvedValue(mockAdminRole as any);
+
+      await expect(
+        service.revokePermission('role-admin', 'perm-1', 'org-1'),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'No se pueden modificar los permisos de un rol del sistema',
+        ),
+      );
 
       expect(repository.revokePermission).not.toHaveBeenCalled();
     });
