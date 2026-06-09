@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { OrganizationUsersRepository } from './organization-users.repository.js';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto.js';
@@ -14,6 +15,10 @@ import { PageDto } from '../../common/pagination/page.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { OrganizationUserEntity } from './domain/organization-user.entity.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
+import {
+  canActorModifyTarget,
+  canActorAssignRole,
+} from '../../common/helpers/role-hierarchy.helper.js';
 
 
 /**
@@ -25,9 +30,14 @@ import { getTenantId } from '../../common/context/tenant.context.js';
  *    evalúe sus invariantes (canAssignRole).
  *  - Traducir el resultado de la entidad en excepciones HTTP (ConflictException).
  *  - Coordinar el flujo entre el repositorio y la entidad de dominio.
+ *  - Aplicar reglas de protección del OWNER y jerarquía de roles.
  *
- * NO contiene lógica de negocio. La regla de unicidad de OWNER y el
- * cambio de rol viven en OrganizationUserEntity.
+ * Reglas de negocio:
+ *  - El OWNER no puede ser degradado ni eliminado.
+ *  - Un actor solo puede modificar miembros de rango estrictamente inferior al suyo.
+ *  - Un actor solo puede asignar roles de rango estrictamente inferior al suyo.
+ *  - Si actorUserId no tiene membresía en la org (ej. GlobalRole.ADMIN global),
+ *    se omite la verificación de jerarquía (el guard ya hizo bypass).
  */
 @Injectable()
 export class OrganizationUsersService {
@@ -138,9 +148,40 @@ export class OrganizationUsersService {
   async update(
     id: string,
     updateOrganizationUserDto: UpdateOrganizationUserDto,
+    actorUserId: string,
   ): Promise<OrganizationUserEntity> {
     const member = await this.findOne(id);
     const newRole = updateOrganizationUserDto.role;
+
+    // ── Protección 1: El OWNER no puede ser degradado ─────────────────────────
+    if (OrganizationUserEntity.isOwner(member.role)) {
+      throw new ForbiddenException(
+        'El OWNER de la organización no puede ser degradado. Transfiere la propiedad antes de modificar este miembro.',
+      );
+    }
+
+    // ── Protección 2: Jerarquía de roles ─────────────────────────────────────
+    // Si actorUserId no tiene membresía en la org (GlobalRole.ADMIN global),
+    // el guard ya hizo bypass → se omite la verificación de jerarquía.
+    const actorMember =
+      await this.organizationUsersRepository.findByUserIdAndOrganizationId(
+        actorUserId,
+        member.organizationId,
+      );
+
+    if (actorMember) {
+      if (!canActorModifyTarget(actorMember.role, member.role)) {
+        throw new ForbiddenException(
+          'No tienes permiso para modificar un miembro de igual o mayor jerarquía.',
+        );
+      }
+
+      if (newRole && !canActorAssignRole(actorMember.role, newRole)) {
+        throw new ForbiddenException(
+          'No puedes asignar un rol igual o superior al tuyo.',
+        );
+      }
+    }
 
     if (!newRole) {
       return member;
@@ -163,8 +204,29 @@ export class OrganizationUsersService {
     return this.organizationUsersRepository.update(id, { role: newRole }, member);
   }
 
-  async remove(id: string): Promise<OrganizationUserEntity> {
-    await this.findOne(id);
+  async remove(id: string, actorUserId: string): Promise<OrganizationUserEntity> {
+    const member = await this.findOne(id);
+
+    // ── Protección 1: El OWNER no puede ser eliminado ─────────────────────────
+    if (OrganizationUserEntity.isOwner(member.role)) {
+      throw new ForbiddenException(
+        'El OWNER de la organización no puede ser eliminado. Transfiere la propiedad antes de eliminar este miembro.',
+      );
+    }
+
+    // ── Protección 2: Jerarquía de roles ─────────────────────────────────────
+    const actorMember =
+      await this.organizationUsersRepository.findByUserIdAndOrganizationId(
+        actorUserId,
+        member.organizationId,
+      );
+
+    if (actorMember && !canActorModifyTarget(actorMember.role, member.role)) {
+      throw new ForbiddenException(
+        'No tienes permiso para eliminar un miembro de igual o mayor jerarquía.',
+      );
+    }
+
     return this.organizationUsersRepository.delete(id);
   }
 }

@@ -15,6 +15,7 @@ import { OrganizationUsersService } from './organization-users.service.js';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto.js';
 import { UpdateOrganizationUserDto } from './dto/update-organization-user.dto.js';
 import { FindOrganizationUsersDto } from './dto/find-organization-users.dto.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import {
   ApiTags,
   ApiOperation,
@@ -71,8 +72,9 @@ export class OrganizationUsersController {
   update(
     @Param('id') id: string,
     @Body() updateOrganizationUserDto: UpdateOrganizationUserDto,
+    @CurrentUser('sub') actorUserId: string,
   ) {
-    return this.organizationUsersService.update(id, updateOrganizationUserDto);
+    return this.organizationUsersService.update(id, updateOrganizationUserDto, actorUserId);
   }
 
   @Delete(':id')
@@ -81,7 +83,10 @@ export class OrganizationUsersController {
   @ApiOkResponse({ description: 'User successfully removed from the organization.' })
   @ApiNotFoundResponse({ description: 'Association not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
-  remove(@Param('id') id: string) {
-    return this.organizationUsersService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @CurrentUser('sub') actorUserId: string,
+  ) {
+    return this.organizationUsersService.remove(id, actorUserId);
   }
 }

@@ -85,6 +85,14 @@ export class OrganizationUserEntity {
   }
 
   /**
+   * Verifica si el rol dado corresponde al OWNER de la organización.
+   * Usado para proteger al OWNER de degradaciones o eliminaciones no autorizadas.
+   */
+  static isOwner(role: Role): boolean {
+    return role === Role.OWNER;
+  }
+
+  /**
    * Aplica el nuevo rol a la entidad.
    */
   applyRoleChange(newRole: Role): void {
