@@ -5,11 +5,21 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { RolePermissionsRepository } from './role-permissions.repository.js';
+import { AuditService } from '../../infraestructure/audit/audit.service.js';
+import { AuditAction } from '../../infraestructure/audit/enums/audit-action.enum.js';
+import { AuditSeverity } from '../../infraestructure/audit/enums/audit-severity.enum.js';
+import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
+import {
+  ROLE_DIRTY_PREFIX,
+  ROLE_DIRTY_TTL_SECONDS,
+} from '../../infraestructure/redis/role-dirty.constants.js';
 
 @Injectable()
 export class RolePermissionsService {
   constructor(
     private readonly rolePermissionsRepository: RolePermissionsRepository,
+    private readonly auditService: AuditService,
+    private readonly redisCacheService: RedisCacheService,
   ) {}
 
   async getRolePermissions(roleId: string, organizationId: string): Promise<string[]> {
@@ -73,11 +83,29 @@ export class RolePermissionsService {
       );
     }
 
-    return this.rolePermissionsRepository.assignPermission(
+    const result = await this.rolePermissionsRepository.assignPermission(
       roleId,
       permissionId,
       organizationId,
     );
+
+    // ── Auditoría ──────────────────────────────────────────────────────────────
+    this.auditService.log({
+      action: AuditAction.PERMISSION_CHANGE,
+      resourceType: 'RolePermission',
+      resourceId: roleId,
+      metadata: { operation: 'ASSIGN', permissionId, organizationId, roleName: role.name },
+      severity: AuditSeverity.HIGH,
+    });
+
+    // ── Dirty flag: marcar el rol como modificado para invalidar tokens viejos ──
+    await this.redisCacheService.set(
+      `${ROLE_DIRTY_PREFIX}${roleId}`,
+      Date.now(),
+      ROLE_DIRTY_TTL_SECONDS,
+    );
+
+    return result;
   }
 
   async revokePermission(
@@ -118,6 +146,21 @@ export class RolePermissionsService {
     }
 
     await this.rolePermissionsRepository.revokePermission(roleId, permissionId);
+
+    // ── Auditoría ──────────────────────────────────────────────────────────────
+    this.auditService.log({
+      action: AuditAction.PERMISSION_CHANGE,
+      resourceType: 'RolePermission',
+      resourceId: roleId,
+      metadata: { operation: 'REVOKE', permissionId, organizationId, roleName: role.name },
+      severity: AuditSeverity.HIGH,
+    });
+
+    // ── Dirty flag: marcar el rol como modificado para invalidar tokens viejos ──
+    await this.redisCacheService.set(
+      `${ROLE_DIRTY_PREFIX}${roleId}`,
+      Date.now(),
+      ROLE_DIRTY_TTL_SECONDS,
+    );
   }
 }
-
