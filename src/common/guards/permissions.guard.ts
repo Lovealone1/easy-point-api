@@ -11,6 +11,10 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { GlobalRole, OrganizationStatus } from '@prisma/client';
 import { Role } from '../enums/role.enum.js';
 import { getTenantId } from '../context/tenant.context.js';
+import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
+import {
+  ROLE_DIRTY_PREFIX,
+} from '../../infraestructure/redis/role-dirty.constants.js';
 
 /**
  * Guard de permisos granular.
@@ -32,6 +36,7 @@ export class PermissionsGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
+    private readonly redisCacheService: RedisCacheService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -112,6 +117,27 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException(
         'Uno o más módulos requeridos para esta acción no están habilitados en su organización',
       );
+    }
+
+    // ── Dirty flag check ─────────────────────────────────────────────────────
+    // Detecta si el rol del usuario fue modificado DESPUÉS de que se emitió
+    // el token JWT actual. Si el dirty flag es más reciente que token.iat,
+    // el usuario tiene permisos desactualizados → forzar re-login.
+    //
+    // Nota: esto aplica solo a roles no-sistema (OWNER/ADMINISTRATOR tienen
+    // bypass a continuación y sus permisos son irrevocables).
+    const dirtyTimestamp = await this.redisCacheService.get<number>(
+      `${ROLE_DIRTY_PREFIX}${orgUser.roleId}`,
+    );
+
+    if (dirtyTimestamp) {
+      // token.iat está en segundos Unix; dirtyTimestamp en milisegundos
+      const tokenIssuedAtMs = ((user as any).iat ?? 0) * 1000;
+      if (dirtyTimestamp > tokenIssuedAtMs) {
+        throw new UnauthorizedException(
+          'Tus permisos han sido modificados. Por favor, vuelve a iniciar sesión para continuar.',
+        );
+      }
     }
 
     // 2. Bypass: Roles sistema (OWNER, ADMINISTRATOR)
