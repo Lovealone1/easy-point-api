@@ -1,9 +1,6 @@
 import {
   Controller,
   Get,
-  Put,
-  Param,
-  Body,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -15,11 +12,8 @@ import {
   ApiOkResponse,
   ApiBearerAuth,
   ApiSecurity,
-  ApiNotFoundResponse,
-  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { PermissionsService } from './permissions.service.js';
-import { SetRolePermissionsDto } from './dto/set-role-permissions.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
@@ -83,51 +77,6 @@ export class PermissionsController {
     return this.permissionsService.getMyPermissions(
       user?.sub || user?.id,
       this.getOrgIdOrThrow(),
-    );
-  }
-
-  /**
-   * GET /permissions/roles/:roleId
-   * Devuelve los permission keys actuales de un rol.
-   */
-  @Get('roles/:roleId')
-  @HttpCode(HttpStatus.OK)
-  @RequirePermission('role_permissions:read')
-  @ApiOperation({ summary: 'Obtener permisos de un rol específico' })
-  @ApiOkResponse({ description: 'Permission keys del rol' })
-  @ApiNotFoundResponse({ description: 'Rol no encontrado' })
-  async getRolePermissions(@Param('roleId') roleId: string) {
-    return this.permissionsService.getRolePermissions(
-      roleId,
-      this.getOrgIdOrThrow(),
-    );
-  }
-
-  /**
-   * PUT /permissions/roles/:roleId
-   * Asigna el conjunto completo de permisos a un rol (reemplaza los existentes).
-   */
-  @Put('roles/:roleId')
-  @HttpCode(HttpStatus.OK)
-  @RequirePermission('role_permissions:update')
-  @ApiOperation({
-    summary: 'Asignar permisos a un rol',
-    description:
-      'Reemplaza atómicamente todos los permisos del rol con el new set proporcionado.',
-  })
-  @ApiOkResponse({ description: 'Permisos asignados exitosamente' })
-  @ApiNotFoundResponse({ description: 'Rol no encontrado' })
-  @ApiBadRequestResponse({
-    description: 'Rol sistema no modificable o keys inválidas',
-  })
-  async setRolePermissions(
-    @Param('roleId') roleId: string,
-    @Body() dto: SetRolePermissionsDto,
-  ) {
-    return this.permissionsService.setRolePermissions(
-      roleId,
-      this.getOrgIdOrThrow(),
-      dto,
     );
   }
 }

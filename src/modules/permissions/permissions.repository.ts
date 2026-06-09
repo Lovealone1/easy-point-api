@@ -39,49 +39,35 @@ export class PermissionsRepository {
 
   /**
    * Devuelve los permission keys asignados a un rol en una organización.
+   * Si se provee organizationId, filtra solo los permisos de los módulos activos para la org.
    */
-  async getPermissionKeysByRole(roleId: string): Promise<string[]> {
+  async getPermissionKeysByRole(roleId: string, organizationId?: string): Promise<string[]> {
     const rolePermissions = await this.prisma.rolePermission.findMany({
-      where: { roleId },
+      where: {
+        roleId,
+        ...(organizationId && {
+          permission: {
+            isActive: true,
+            feature: {
+              isActive: true,
+              module: {
+                isActive: true,
+                organizationModules: {
+                  some: {
+                    organizationId,
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
       include: { permission: { select: { key: true, isActive: true } } },
     });
 
     return rolePermissions
       .filter((rp) => rp.permission.isActive)
       .map((rp) => rp.permission.key);
-  }
-
-  /**
-   * Reemplaza atómicamente todos los permisos de un rol con el nuevo set.
-   * Usa una transacción: primero elimina los existentes, luego crea los nuevos.
-   */
-  async setRolePermissions(
-    roleId: string,
-    organizationId: string,
-    permissionKeys: string[],
-  ): Promise<void> {
-    // Resolver los IDs de los permisos a partir de sus keys
-    const permissions = await this.prisma.permission.findMany({
-      where: {
-        key: { in: permissionKeys },
-        isActive: true,
-      },
-      select: { id: true, key: true },
-    });
-
-    await this.prisma.$transaction([
-      // 1. Eliminar todos los permisos actuales del rol
-      this.prisma.rolePermission.deleteMany({ where: { roleId } }),
-      // 2. Crear los nuevos
-      this.prisma.rolePermission.createMany({
-        data: permissions.map((p) => ({
-          roleId,
-          permissionId: p.id,
-          organizationId,
-        })),
-        skipDuplicates: true,
-      }),
-    ]);
   }
 
   /**
@@ -101,7 +87,7 @@ export class PermissionsRepository {
 
     if (!orgUser) return [];
 
-    return this.getPermissionKeysByRole(orgUser.roleId);
+    return this.getPermissionKeysByRole(orgUser.roleId, organizationId);
   }
 
   /**

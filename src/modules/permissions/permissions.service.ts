@@ -1,11 +1,9 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { PermissionsRepository } from './permissions.repository.js';
-import { SetRolePermissionsDto } from './dto/set-role-permissions.dto.js';
 import { ModuleEntity } from './domain/module.entity.js';
 import { Role } from '../../common/enums/role.enum.js';
 
@@ -52,74 +50,8 @@ export class PermissionsService {
     }
 
     const permissions =
-      await this.permissionsRepository.getPermissionKeysByRole(orgUser.roleId);
+      await this.permissionsRepository.getPermissionKeysByRole(orgUser.roleId, organizationId);
 
     return { permissions, isSystemRole: false };
-  }
-
-  /**
-   * Devuelve los permisos de un rol específico (para el UI de edición de roles).
-   */
-  async getRolePermissions(
-    roleId: string,
-    organizationId: string,
-  ): Promise<string[]> {
-    const role = await this.prisma.role.findFirst({
-      where: { id: roleId, organizationId },
-    });
-
-    if (!role) {
-      throw new NotFoundException(`Rol con ID ${roleId} no encontrado`);
-    }
-
-    return this.permissionsRepository.getPermissionKeysByRole(roleId);
-  }
-
-  /**
-   * Asigna un conjunto de permisos a un rol (reemplaza los existentes).
-   * Valida que todas las keys existan en el catálogo antes de asignar.
-   */
-  async setRolePermissions(
-    roleId: string,
-    organizationId: string,
-    dto: SetRolePermissionsDto,
-  ): Promise<{ assigned: number; permissionKeys: string[] }> {
-    const role = await this.prisma.role.findFirst({
-      where: { id: roleId, organizationId },
-    });
-
-    if (!role) {
-      throw new NotFoundException(`Rol con ID ${roleId} no encontrado`);
-    }
-
-    if (role.isSystemDefault) {
-      throw new BadRequestException(
-        'No se pueden modificar los permisos de un rol del sistema',
-      );
-    }
-
-    // Validar que todos los keys existen en el catálogo
-    const foundPermissions =
-      await this.permissionsRepository.findPermissionsByKeys(dto.permissionKeys);
-
-    const foundKeys = new Set(foundPermissions.map((p) => p.key));
-    const invalidKeys = dto.permissionKeys.filter((k) => !foundKeys.has(k));
-
-    if (invalidKeys.length > 0) {
-      throw new BadRequestException(
-        `Los siguientes permission keys no existen o están inactivos: ${invalidKeys.join(', ')}`,
-      );
-    }
-
-    await this.permissionsRepository.setRolePermissions(
-      roleId,
-      organizationId,
-      dto.permissionKeys,
-    );
-
-    return {
-      assigned: dto.permissionKeys.length,
-      permissionKeys: dto.permissionKeys,
-    };
   }
 }
