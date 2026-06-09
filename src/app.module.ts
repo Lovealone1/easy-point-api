@@ -42,6 +42,7 @@ import { StorageModule } from './infraestructure/storage/storage.module.js';
 import { OrganizationConfigsModule } from './modules/organization-configs/organization-configs.module.js';
 import { PermissionsModule } from './modules/permissions/permissions.module.js';
 import { SystemModulesModule } from './modules/system-modules/system-modules.module.js';
+import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module.js';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { SystemModulesModule } from './modules/system-modules/system-modules.mod
     RolesModule,
     PermissionsModule,
     SystemModulesModule,
+    RolePermissionsModule,
     DiscountRulesModule,
   ],
   controllers: [],
