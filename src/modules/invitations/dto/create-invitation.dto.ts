@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '../../../common/enums/role.enum.js';
 
@@ -16,7 +16,7 @@ export class CreateInvitationDto {
     enum: Role,
     example: Role.COLLABORATOR,
   })
-  @IsEnum(Role, { message: 'Role must be a valid organization role' })
+  @IsString({ message: 'Role must be a string representing the role name' })
   @IsNotEmpty()
-  role: Role;
+  role: string;
 }

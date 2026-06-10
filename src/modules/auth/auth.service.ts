@@ -548,7 +548,18 @@ export class AuthService {
                 config: true,
               },
             },
-            role: true,
+            role: {
+              include: {
+                rolePermissions: {
+                  where: { permission: { isActive: true } },
+                  include: {
+                    permission: {
+                      select: { key: true },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -584,6 +595,12 @@ export class AuthService {
           name: orgUser.organization.name,
           slug: orgUser.organization.slug,
           role: orgUser.role.name,
+          /**
+           * Granular permission keys for this role in the organization.
+           * e.g. ['sales:create', 'inventory:read', 'employees:view_salary']
+           * Only active permissions are included.
+           */
+          permissions: orgUser.role.rolePermissions.map((rp) => rp.permission.key),
           config: orgUser.organization.config
             ? {
                 ...orgUser.organization.config,
