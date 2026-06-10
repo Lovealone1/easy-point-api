@@ -1,4 +1,4 @@
-import { IsUUID, IsEnum, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsUUID, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '../../../common/enums/role.enum.js';
 
@@ -9,8 +9,8 @@ export class CreateOrganizationUserDto {
   userId: string;
 
   @ApiProperty({ enum: Role, required: false, default: 'USER', description: 'The role of the user within the organization' })
-  @IsEnum(Role)
+  @IsString()
   @IsOptional()
-  role?: Role;
+  role?: string;
 }
 

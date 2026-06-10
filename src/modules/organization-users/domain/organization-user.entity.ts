@@ -34,7 +34,7 @@ export class OrganizationUserEntity {
   readonly id: string;
   readonly userId: string;
   readonly organizationId: string;
-  role: Role;
+  role: string;
   readonly joinedAt: Date;
 
   /** Datos del usuario relacionado — solo presente cuando se cargó con include */
@@ -44,7 +44,7 @@ export class OrganizationUserEntity {
     id: string;
     userId: string;
     organizationId: string;
-    role: Role;
+    role: string;
     joinedAt: Date;
     user?: OrganizationUserMemberInfo;
   }) {
@@ -74,9 +74,9 @@ export class OrganizationUserEntity {
    * @param currentRole  Rol actual de la membresía (para update — evita contar el propio registro).
    */
   static canAssignRole(
-    newRole: Role,
+    newRole: string,
     ownerCount: number,
-    currentRole?: Role,
+    currentRole?: string,
   ): boolean {
     if (newRole !== Role.OWNER) return true;
     // Si el miembro ya es OWNER, no rompe el invariante reasignarle OWNER
@@ -88,14 +88,14 @@ export class OrganizationUserEntity {
    * Verifica si el rol dado corresponde al OWNER de la organización.
    * Usado para proteger al OWNER de degradaciones o eliminaciones no autorizadas.
    */
-  static isOwner(role: Role): boolean {
+  static isOwner(role: string): boolean {
     return role === Role.OWNER;
   }
 
   /**
    * Aplica el nuevo rol a la entidad.
    */
-  applyRoleChange(newRole: Role): void {
+  applyRoleChange(newRole: string): void {
     this.role = newRole;
   }
 
@@ -126,7 +126,7 @@ export class OrganizationUserEntity {
       id: raw.id,
       userId: raw.userId,
       organizationId: raw.organizationId,
-      role: raw.role.name as Role,
+      role: raw.role.name,
       joinedAt: raw.joinedAt,
       user: raw.user ?? undefined,
     });

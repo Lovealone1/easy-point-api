@@ -15,7 +15,7 @@ function makeEntity(overrides: Partial<{
   id: string;
   userId: string;
   organizationId: string;
-  role: Role;
+  role: string;
 }>): OrganizationUserEntity {
   return new OrganizationUserEntity({
     id:             overrides.id             ?? 'member-001',
@@ -116,7 +116,7 @@ describe('OrganizationUsersService', () => {
 
     it('lanza ForbiddenException si ADMINISTRATOR intenta ascender a alguien a OWNER', async () => {
       // Target tiene rol custom 'CAJERO' (rango 1)
-      const targetMember = makeEntity({ id: 'member-002', role: 'CAJERO' as any, userId: 'user-002' });
+      const targetMember = makeEntity({ id: 'member-002', role: 'CAJERO', userId: 'user-002' });
       const actorMember  = makeEntity({ id: 'member-actor', role: Role.ADMINISTRATOR, userId: 'actor-001' });
 
       mockRepo.findById.mockResolvedValue(targetMember);
@@ -143,7 +143,7 @@ describe('OrganizationUsersService', () => {
 
     it('permite a ADMINISTRATOR (rango 2) modificar a un rol custom (rango 1)', async () => {
       // Target tiene rol custom 'VENDEDOR'
-      const targetMember = makeEntity({ id: 'member-002', role: 'VENDEDOR' as any, userId: 'user-002' });
+      const targetMember = makeEntity({ id: 'member-002', role: 'VENDEDOR', userId: 'user-002' });
       const actorMember  = makeEntity({ id: 'member-actor', role: Role.ADMINISTRATOR, userId: 'actor-001' });
 
       mockRepo.findById.mockResolvedValue(targetMember);
@@ -157,8 +157,8 @@ describe('OrganizationUsersService', () => {
     });
 
     it('lanza ForbiddenException si un rol custom intenta modificar a otro rol custom del mismo rango', async () => {
-      const targetMember = makeEntity({ id: 'member-002', role: 'VENDEDOR' as any, userId: 'user-002' });
-      const actorMember  = makeEntity({ id: 'member-actor', role: 'CAJERO' as any, userId: 'actor-001' });
+      const targetMember = makeEntity({ id: 'member-002', role: 'VENDEDOR', userId: 'user-002' });
+      const actorMember  = makeEntity({ id: 'member-actor', role: 'CAJERO', userId: 'actor-001' });
 
       mockRepo.findById.mockResolvedValue(targetMember);
       mockRepo.findByUserIdAndOrganizationId.mockResolvedValue(actorMember);
@@ -190,7 +190,7 @@ describe('OrganizationUsersService', () => {
     it('lanza ForbiddenException si COLLABORATOR intenta eliminar a un ADMINISTRATOR', async () => {
       // Un rol custom 'CAJERO' (rango 1) no puede eliminar a un ADMINISTRATOR (rango 2)
       const targetMember = makeEntity({ id: 'member-002', role: Role.ADMINISTRATOR, userId: 'user-002' });
-      const actorMember  = makeEntity({ id: 'member-actor', role: 'CAJERO' as any, userId: 'actor-001' });
+      const actorMember  = makeEntity({ id: 'member-actor', role: 'CAJERO', userId: 'actor-001' });
 
       mockRepo.findById.mockResolvedValue(targetMember);
       mockRepo.findByUserIdAndOrganizationId.mockResolvedValue(actorMember);
@@ -201,7 +201,7 @@ describe('OrganizationUsersService', () => {
     });
 
     it('permite a OWNER eliminar a un rol custom', async () => {
-      const targetMember = makeEntity({ id: 'member-002', role: 'CAJERO' as any, userId: 'user-002' });
+      const targetMember = makeEntity({ id: 'member-002', role: 'CAJERO', userId: 'user-002' });
       const actorMember  = makeEntity({ id: 'member-actor', role: Role.OWNER, userId: 'actor-001' });
 
       mockRepo.findById.mockResolvedValue(targetMember);
@@ -214,7 +214,7 @@ describe('OrganizationUsersService', () => {
     });
 
     it('permite a ADMINISTRATOR eliminar a un rol custom', async () => {
-      const targetMember = makeEntity({ id: 'member-002', role: 'VENDEDOR' as any, userId: 'user-002' });
+      const targetMember = makeEntity({ id: 'member-002', role: 'VENDEDOR', userId: 'user-002' });
       const actorMember  = makeEntity({ id: 'member-actor', role: Role.ADMINISTRATOR, userId: 'actor-001' });
 
       mockRepo.findById.mockResolvedValue(targetMember);
