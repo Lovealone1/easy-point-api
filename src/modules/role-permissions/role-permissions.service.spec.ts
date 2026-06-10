@@ -34,6 +34,13 @@ describe('RolePermissionsService', () => {
     isSystemDefault: true,
   };
 
+  const mockOtherSystemRole = {
+    id: 'role-other-system',
+    organizationId: 'org-1',
+    name: 'OTHER_SYSTEM',
+    isSystemDefault: true,
+  };
+
   const mockPermission = {
     id: 'perm-1',
     key: 'sales:create',
@@ -152,11 +159,23 @@ describe('RolePermissionsService', () => {
       expect(repository.assignPermission).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException if role is another system default', async () => {
+    it('should successfully assign permission if role is ADMINISTRATOR (system default but editable)', async () => {
       repository.findRoleByIdAndOrg.mockResolvedValue(mockAdminRole as any);
+      repository.findPermissionByIdAndOrg.mockResolvedValue(mockPermission as any);
+      repository.findRolePermission.mockResolvedValue(null);
+      repository.assignPermission.mockResolvedValue({ id: 'rp-admin-1' } as any);
+
+      const result = await service.assignPermission('role-admin', 'perm-1', 'org-1');
+
+      expect(repository.assignPermission).toHaveBeenCalledWith('role-admin', 'perm-1', 'org-1');
+      expect(result).toEqual({ id: 'rp-admin-1' });
+    });
+
+    it('should throw BadRequestException if role is another system default (not ADMINISTRATOR or OWNER)', async () => {
+      repository.findRoleByIdAndOrg.mockResolvedValue(mockOtherSystemRole as any);
 
       await expect(
-        service.assignPermission('role-admin', 'perm-1', 'org-1'),
+        service.assignPermission('role-other-system', 'perm-1', 'org-1'),
       ).rejects.toThrow(
         new BadRequestException(
           'No se pueden modificar los permisos de un rol del sistema',
@@ -257,11 +276,21 @@ describe('RolePermissionsService', () => {
       expect(repository.revokePermission).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException if trying to revoke from another system default role', async () => {
+    it('should successfully revoke permission if role is ADMINISTRATOR (system default but editable)', async () => {
       repository.findRoleByIdAndOrg.mockResolvedValue(mockAdminRole as any);
+      repository.findRolePermission.mockResolvedValue({ id: 'rp-admin-1' } as any);
+      repository.revokePermission.mockResolvedValue(undefined as any);
+
+      await service.revokePermission('role-admin', 'perm-1', 'org-1');
+
+      expect(repository.revokePermission).toHaveBeenCalledWith('role-admin', 'perm-1');
+    });
+
+    it('should throw BadRequestException if trying to revoke from another system default role (not ADMINISTRATOR or OWNER)', async () => {
+      repository.findRoleByIdAndOrg.mockResolvedValue(mockOtherSystemRole as any);
 
       await expect(
-        service.revokePermission('role-admin', 'perm-1', 'org-1'),
+        service.revokePermission('role-other-system', 'perm-1', 'org-1'),
       ).rejects.toThrow(
         new BadRequestException(
           'No se pueden modificar los permisos de un rol del sistema',
