@@ -55,7 +55,7 @@ export class RolePermissionsService {
       );
     }
 
-    if (role.isSystemDefault) {
+    if (role.isSystemDefault && role.name !== 'ADMINISTRATOR') {
       throw new BadRequestException(
         'No se pueden modificar los permisos de un rol del sistema',
       );
@@ -128,7 +128,7 @@ export class RolePermissionsService {
       );
     }
 
-    if (role.isSystemDefault) {
+    if (role.isSystemDefault && role.name !== 'ADMINISTRATOR') {
       throw new BadRequestException(
         'No se pueden modificar los permisos de un rol del sistema',
       );
