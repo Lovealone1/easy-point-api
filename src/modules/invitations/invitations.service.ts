@@ -138,7 +138,7 @@ export class InvitationsService {
   // ────────────────────────────────────────────────────────────────────────────
   async verifyToken(token: string): Promise<{
     email: string;
-    role: Role;
+    role: string;
     organizationName: string;
     tempInviteToken?: string;
   }> {
@@ -165,7 +165,7 @@ export class InvitationsService {
 
     const baseResponse = {
       email: invitation.email,
-      role: invitation.role.name as Role,
+      role: invitation.role.name,
       organizationName: invitation.organization.name,
     };
 
