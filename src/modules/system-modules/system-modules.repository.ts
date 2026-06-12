@@ -108,58 +108,28 @@ export class SystemModulesRepository {
   }
 
   /**
-   * Asigna un conjunto de módulos a una organización (idempotente).
+   * Obtiene la lista de todos los módulos en el catálogo global.
    */
-  async assignModules(organizationId: string, moduleIds: string[]): Promise<void> {
-    await this.prisma.organizationModule.createMany({
-      data: moduleIds.map((moduleId) => ({
-        organizationId,
-        moduleId,
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  /**
-   * Desasigna un módulo específico de una organización.
-   */
-  async unassignModule(organizationId: string, moduleId: string): Promise<void> {
-    await this.prisma.organizationModule.deleteMany({
-      where: {
-        organizationId,
-        moduleId,
-      },
-    });
-  }
-
-  /**
-   * Obtiene la lista de módulos asignados a una organización específica.
-   */
-  async getAssignedModules(organizationId: string): Promise<ModuleEntity[]> {
-    const orgModules = await this.prisma.organizationModule.findMany({
-      where: { organizationId },
+  async findAll(filter?: { isActive?: boolean }): Promise<ModuleEntity[]> {
+    const modules = await this.prisma.module.findMany({
+      where: filter,
+      orderBy: { sortOrder: 'asc' },
       include: {
-        module: {
+        features: {
+          orderBy: { sortOrder: 'asc' },
           include: {
-            features: {
-              include: {
-                permissions: true,
-              },
+            permissions: {
+              orderBy: { sortOrder: 'asc' },
             },
           },
         },
       },
-      orderBy: {
-        module: {
-          sortOrder: 'asc',
-        },
-      },
     });
 
-    return orgModules.map((om) =>
+    return modules.map((m) =>
       ModuleEntity.fromPrisma(
-        om.module,
-        om.module.features.map((f) =>
+        m,
+        m.features.map((f) =>
           FeatureEntity.fromPrisma(
             f,
             f.permissions.map(PermissionEntity.fromPrisma),
@@ -170,22 +140,29 @@ export class SystemModulesRepository {
   }
 
   /**
-   * Obtiene la lista de organizaciones que tienen asignado un módulo específico.
+   * Actualiza el estado isActive de un módulo en el catálogo global.
    */
-  async getOrganizationsByModule(moduleId: string): Promise<any[]> {
-    const orgModules = await this.prisma.organizationModule.findMany({
-      where: { moduleId },
+  async updateActive(id: string, isActive: boolean): Promise<ModuleEntity> {
+    const updated = await this.prisma.module.update({
+      where: { id },
+      data: { isActive },
       include: {
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isActive: true,
+        features: {
+          include: {
+            permissions: true,
           },
         },
       },
     });
-    return orgModules.map((om) => om.organization);
+
+    return ModuleEntity.fromPrisma(
+      updated,
+      updated.features.map((f) =>
+        FeatureEntity.fromPrisma(
+          f,
+          f.permissions.map(PermissionEntity.fromPrisma),
+        ),
+      ),
+    );
   }
 }

@@ -69,86 +69,22 @@ export class SystemModulesService {
   }
 
   /**
-   * Asigna una lista de módulos a una organización, verificando primero su existencia.
+   * Obtiene todos los módulos del catálogo global, opcionalmente filtrados por isActive.
    */
-  async assignModulesToOrganization(
-    organizationId: string,
-    moduleIds: string[],
-  ): Promise<void> {
-    // 1. Validar existencia de la organización
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
-    if (!organization) {
-      throw new NotFoundException(`Organización con ID '${organizationId}' no encontrada.`);
-    }
-
-    // 2. Validar existencia de todos los módulos solicitados
-    const foundModulesCount = await this.prisma.module.count({
-      where: { id: { in: moduleIds } },
-    });
-    if (foundModulesCount !== moduleIds.length) {
-      throw new BadRequestException(
-        'Uno o más IDs de módulos proporcionados no existen en el catálogo.',
-      );
-    }
-
-    // 3. Proceder con la asignación
-    await this.systemModulesRepository.assignModules(organizationId, moduleIds);
+  async findAll(isActive?: boolean): Promise<ModuleEntity[]> {
+    const filter = isActive !== undefined ? { isActive } : undefined;
+    return this.systemModulesRepository.findAll(filter);
   }
 
   /**
-   * Elimina la asignación de un módulo para una organización.
+   * Modifica el estado activo/inactivo de un módulo global.
    */
-  async unassignModuleFromOrganization(
-    organizationId: string,
-    moduleId: string,
-  ): Promise<void> {
-    // 1. Validar existencia de la organización
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
-    if (!organization) {
-      throw new NotFoundException(`Organización con ID '${organizationId}' no encontrada.`);
+  async toggleActive(id: string, isActive: boolean): Promise<ModuleEntity> {
+    const existing = await this.systemModulesRepository.findById(id);
+    if (!existing) {
+      throw new NotFoundException(`Módulo con ID '${id}' no encontrado.`);
     }
 
-    // 2. Validar existencia del módulo
-    const moduleExists = await this.prisma.module.count({
-      where: { id: moduleId },
-    });
-    if (moduleExists === 0) {
-      throw new NotFoundException(`Módulo con ID '${moduleId}' no encontrado.`);
-    }
-
-    // 3. Eliminar relación
-    await this.systemModulesRepository.unassignModule(organizationId, moduleId);
-  }
-
-  /**
-   * Retorna todos los módulos asignados a una organización.
-   */
-  async getModulesForOrganization(organizationId: string): Promise<ModuleEntity[]> {
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
-    if (!organization) {
-      throw new NotFoundException(`Organización con ID '${organizationId}' no encontrada.`);
-    }
-
-    return this.systemModulesRepository.getAssignedModules(organizationId);
-  }
-
-  /**
-   * Retorna todas las organizaciones que tienen asignado un módulo específico.
-   */
-  async getOrganizationsByModule(moduleId: string): Promise<any[]> {
-    const moduleExists = await this.prisma.module.count({
-      where: { id: moduleId },
-    });
-    if (moduleExists === 0) {
-      throw new NotFoundException(`Módulo con ID '${moduleId}' no encontrado.`);
-    }
-
-    return this.systemModulesRepository.getOrganizationsByModule(moduleId);
+    return this.systemModulesRepository.updateActive(id, isActive);
   }
 }

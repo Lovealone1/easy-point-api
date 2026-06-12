@@ -16,10 +16,8 @@ describe('SystemModulesService', () => {
       create: jest.fn(),
       delete: jest.fn(),
       findById: jest.fn(),
-      assignModules: jest.fn(),
-      unassignModule: jest.fn(),
-      getAssignedModules: jest.fn(),
-      getOrganizationsByModule: jest.fn(),
+      findAll: jest.fn(),
+      updateActive: jest.fn(),
     };
 
     const mockPrisma = {
@@ -192,75 +190,9 @@ describe('SystemModulesService', () => {
     });
   });
 
-  describe('assignModulesToOrganization', () => {
-    it('should successfully assign modules to organization', async () => {
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ id: 'org-1' });
-      (prisma.module.count as jest.Mock).mockResolvedValue(2);
-      repository.assignModules.mockResolvedValue(undefined);
-
-      await service.assignModulesToOrganization('org-1', ['mod-1', 'mod-2']);
-
-      expect(prisma.organization.findUnique).toHaveBeenCalledWith({ where: { id: 'org-1' } });
-      expect(prisma.module.count).toHaveBeenCalledWith({ where: { id: { in: ['mod-1', 'mod-2'] } } });
-      expect(repository.assignModules).toHaveBeenCalledWith('org-1', ['mod-1', 'mod-2']);
-    });
-
-    it('should throw NotFoundException if organization does not exist', async () => {
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(null);
-
-      await expect(service.assignModulesToOrganization('unknown-org', ['mod-1'])).rejects.toThrow(
-        NotFoundException,
-      );
-      expect(repository.assignModules).not.toHaveBeenCalled();
-    });
-
-    it('should throw BadRequestException if a module ID does not exist', async () => {
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ id: 'org-1' });
-      (prisma.module.count as jest.Mock).mockResolvedValue(1); // One missing
-
-      await expect(service.assignModulesToOrganization('org-1', ['mod-1', 'invalid-mod'])).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(repository.assignModules).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('unassignModuleFromOrganization', () => {
-    it('should successfully unassign a module', async () => {
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ id: 'org-1' });
-      (prisma.module.count as jest.Mock).mockResolvedValue(1);
-      repository.unassignModule.mockResolvedValue(undefined);
-
-      await service.unassignModuleFromOrganization('org-1', 'mod-1');
-
-      expect(prisma.organization.findUnique).toHaveBeenCalledWith({ where: { id: 'org-1' } });
-      expect(prisma.module.count).toHaveBeenCalledWith({ where: { id: 'mod-1' } });
-      expect(repository.unassignModule).toHaveBeenCalledWith('org-1', 'mod-1');
-    });
-
-    it('should throw NotFoundException if organization does not exist', async () => {
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(null);
-
-      await expect(service.unassignModuleFromOrganization('unknown-org', 'mod-1')).rejects.toThrow(
-        NotFoundException,
-      );
-      expect(repository.unassignModule).not.toHaveBeenCalled();
-    });
-
-    it('should throw NotFoundException if module does not exist', async () => {
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ id: 'org-1' });
-      (prisma.module.count as jest.Mock).mockResolvedValue(0);
-
-      await expect(service.unassignModuleFromOrganization('org-1', 'invalid-mod')).rejects.toThrow(
-        NotFoundException,
-      );
-      expect(repository.unassignModule).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getModulesForOrganization', () => {
-    it('should return all assigned modules', async () => {
-      const mockAssigned = [
+  describe('findAll', () => {
+    it('should successfully call repository findAll without filters', async () => {
+      const mockModules = [
         new ModuleEntity({
           id: 'mod-1',
           key: 'sales',
@@ -269,47 +201,66 @@ describe('SystemModulesService', () => {
           icon: null,
           sortOrder: 1,
           isActive: true,
-          features: [],
         }),
       ];
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ id: 'org-1' });
-      repository.getAssignedModules.mockResolvedValue(mockAssigned);
+      repository.findAll.mockResolvedValue(mockModules);
 
-      const result = await service.getModulesForOrganization('org-1');
+      const result = await service.findAll();
 
-      expect(prisma.organization.findUnique).toHaveBeenCalledWith({ where: { id: 'org-1' } });
-      expect(repository.getAssignedModules).toHaveBeenCalledWith('org-1');
-      expect(result).toEqual(mockAssigned);
+      expect(repository.findAll).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual(mockModules);
     });
 
-    it('should throw NotFoundException if organization does not exist', async () => {
-      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(null);
+    it('should successfully call repository findAll with isActive filter', async () => {
+      const mockModules = [
+        new ModuleEntity({
+          id: 'mod-1',
+          key: 'sales',
+          name: 'Ventas',
+          description: null,
+          icon: null,
+          sortOrder: 1,
+          isActive: true,
+        }),
+      ];
+      repository.findAll.mockResolvedValue(mockModules);
 
-      await expect(service.getModulesForOrganization('unknown-org')).rejects.toThrow(
-        NotFoundException,
-      );
+      const result = await service.findAll(true);
+
+      expect(repository.findAll).toHaveBeenCalledWith({ isActive: true });
+      expect(result).toEqual(mockModules);
     });
   });
 
-  describe('getOrganizationsByModule', () => {
-    it('should return all organizations for a module', async () => {
-      const mockOrgs = [{ id: 'org-1', name: 'Org 1' }];
-      (prisma.module.count as jest.Mock).mockResolvedValue(1);
-      repository.getOrganizationsByModule.mockResolvedValue(mockOrgs);
+  describe('toggleActive', () => {
+    const mockModule = new ModuleEntity({
+      id: 'mod-1',
+      key: 'sales',
+      name: 'Ventas',
+      description: null,
+      icon: null,
+      sortOrder: 1,
+      isActive: true,
+    });
 
-      const result = await service.getOrganizationsByModule('mod-1');
+    it('should successfully toggle active status if module exists', async () => {
+      repository.findById.mockResolvedValue(mockModule);
+      repository.updateActive.mockResolvedValue({ ...mockModule, isActive: false });
 
-      expect(prisma.module.count).toHaveBeenCalledWith({ where: { id: 'mod-1' } });
-      expect(repository.getOrganizationsByModule).toHaveBeenCalledWith('mod-1');
-      expect(result).toEqual(mockOrgs);
+      const result = await service.toggleActive('mod-1', false);
+
+      expect(repository.findById).toHaveBeenCalledWith('mod-1');
+      expect(repository.updateActive).toHaveBeenCalledWith('mod-1', false);
+      expect(result.isActive).toBe(false);
     });
 
     it('should throw NotFoundException if module does not exist', async () => {
-      (prisma.module.count as jest.Mock).mockResolvedValue(0);
+      repository.findById.mockResolvedValue(null);
 
-      await expect(service.getOrganizationsByModule('unknown-mod')).rejects.toThrow(
+      await expect(service.toggleActive('unknown-id', false)).rejects.toThrow(
         NotFoundException,
       );
+      expect(repository.updateActive).not.toHaveBeenCalled();
     });
   });
 });
