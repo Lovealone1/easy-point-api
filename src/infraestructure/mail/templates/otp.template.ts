@@ -1,9 +1,16 @@
 export function getOtpEmailTemplate(otp: string, intent: string): string {
   const isRegister = intent === 'REGISTER';
-  const mainTitle = isRegister ? 'Confirm your email address' : 'Verify your login attempt';
+  const isChangeEmail = intent === 'CHANGE_EMAIL';
+  const mainTitle = isRegister
+    ? 'Confirm your email address'
+    : isChangeEmail
+      ? 'Confirm your new email address'
+      : 'Verify your login attempt';
   const description = isRegister
     ? 'Use the code below to verify your email and complete your registration for Easy Point.'
-    : 'Use the code below to verify your identity and complete your login to Easy Point.';
+    : isChangeEmail
+      ? 'Use the code below to confirm and verify your new email address in the administrative panel.'
+      : 'Use the code below to verify your identity and complete your login to Easy Point.';
 
   // We no longer format the OTP with physical spaces. 
   // Instead, we will use CSS letter-spacing so that when the user double-taps 

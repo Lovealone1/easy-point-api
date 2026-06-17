@@ -35,4 +35,13 @@ export class UsersRepository {
     const raw = await this.prisma.user.delete({ where: { id } });
     return UserEntity.fromPrisma(raw);
   }
+
+  async findByEmail(email: string): Promise<UserEntity | null> {
+    const raw = await this.prisma.user.findUnique({ where: { email } });
+    return raw ? UserEntity.fromPrisma(raw) : null;
+  }
+
+  async revokeRefreshTokens(userId: string): Promise<void> {
+    await this.prisma.refreshToken.deleteMany({ where: { userId } });
+  }
 }
