@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Role } from '../../common/enums/role.enum.js';
 import { Prisma } from '@prisma/client';
@@ -44,11 +44,24 @@ export class OrganizationUsersRepository {
   }
 
   async create(data: { userId: string; organizationId: string; role: string }): Promise<OrganizationUserEntity> {
+    const roleRecord = await this.prisma.role.findUnique({
+      where: {
+        organizationId_name: {
+          organizationId: data.organizationId,
+          name: data.role,
+        },
+      },
+    });
+
+    if (!roleRecord) {
+      throw new NotFoundException(`Role ${data.role} not found in organization ${data.organizationId}`);
+    }
+
     const raw = await this.prisma.organizationUser.create({
       data: {
-        user: { connect: { id: data.userId } },
-        organization: { connect: { id: data.organizationId } },
-        role: { connect: { organizationId_name: { organizationId: data.organizationId, name: data.role } } }
+        userId: data.userId,
+        organizationId: data.organizationId,
+        roleId: roleRecord.id,
       },
       include: { role: true }
     });
