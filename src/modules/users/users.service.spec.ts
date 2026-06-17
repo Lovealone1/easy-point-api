@@ -1,14 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { UsersRepository } from './users.repository.js';
 import { UserEntity } from './domain/user.entity.js';
 import { GlobalRole } from '@prisma/client';
 import { Order } from '../../common/pagination/page-options.dto.js';
+import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
+import { MailService } from '../../infraestructure/mail/mail.service.js';
+import appConfig from '../../common/config/config.js';
+import * as argon2 from 'argon2';
 
 describe('UsersService', () => {
   let service: UsersService;
   let repository: jest.Mocked<UsersRepository>;
+  let redisCacheService: jest.Mocked<any>;
+  let mailService: jest.Mocked<any>;
 
   const mockUserRaw = {
     id: 'user-123',
@@ -31,6 +37,19 @@ describe('UsersService', () => {
       findById: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      findByEmail: jest.fn(),
+      revokeRefreshTokens: jest.fn(),
+    };
+
+    const mockRedisCacheService = {
+      get: jest.fn(),
+      set: jest.fn(),
+      delete: jest.fn(),
+      smembers: jest.fn(),
+    };
+
+    const mockMailService = {
+      sendMail: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -40,11 +59,29 @@ describe('UsersService', () => {
           provide: UsersRepository,
           useValue: mockRepository,
         },
+        {
+          provide: RedisCacheService,
+          useValue: mockRedisCacheService,
+        },
+        {
+          provide: MailService,
+          useValue: mockMailService,
+        },
+        {
+          provide: appConfig.KEY,
+          useValue: {
+            app: {
+              env: 'development',
+            },
+          },
+        },
       ],
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    repository = module.get(UsersRepository);
+    repository = module.get(UsersRepository) as any;
+    redisCacheService = module.get(RedisCacheService) as any;
+    mailService = module.get(MailService) as any;
   });
 
   it('should be defined', () => {
@@ -164,6 +201,63 @@ describe('UsersService', () => {
       expect(result).toBeDefined();
       expect(result.id).toBe(mockUserEntity.id);
       expect(repository.delete).toHaveBeenCalledWith('user-123');
+    });
+  });
+
+  describe('requestEmailOtp', () => {
+    it('should throw BadRequestException if new email is same as current email', async () => {
+      repository.findById.mockResolvedValue(mockUserEntity);
+      await expect(
+        service.requestEmailOtp('user-123', { newEmail: mockUserEntity.email }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw ConflictException if new email is already in use', async () => {
+      repository.findById.mockResolvedValue(mockUserEntity);
+      repository.findByEmail.mockResolvedValue({ id: 'another-user' } as any);
+      await expect(
+        service.requestEmailOtp('user-123', { newEmail: 'existing@example.com' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should generate OTP and log it in development mode', async () => {
+      repository.findById.mockResolvedValue(mockUserEntity);
+      repository.findByEmail.mockResolvedValue(null);
+      redisCacheService.set.mockResolvedValue(undefined);
+
+      const result = await service.requestEmailOtp('user-123', { newEmail: 'new@example.com' });
+      expect(result.message).toContain('locally');
+      expect(redisCacheService.set).toHaveBeenCalled();
+      expect(mailService.sendMail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyEmailOtp', () => {
+    it('should throw BadRequestException if OTP is invalid or expired', async () => {
+      repository.findById.mockResolvedValue(mockUserEntity);
+      repository.findByEmail.mockResolvedValue(null);
+      redisCacheService.get.mockResolvedValue(null);
+
+      await expect(
+        service.verifyEmailOtp('user-123', { newEmail: 'new@example.com', otp: '123456' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should successfully verify OTP and update user email', async () => {
+      repository.findById.mockResolvedValue(mockUserEntity);
+      repository.findByEmail.mockResolvedValue(null);
+      
+      const otp = '123456';
+      const hash = await argon2.hash(otp);
+      redisCacheService.get.mockResolvedValue(hash);
+      redisCacheService.smembers.mockResolvedValue([]);
+      
+      repository.update.mockResolvedValue({ ...mockUserEntity, email: 'new@example.com' } as any);
+
+      const result = await service.verifyEmailOtp('user-123', { newEmail: 'new@example.com', otp });
+      expect(result.email).toBe('new@example.com');
+      expect(redisCacheService.delete).toHaveBeenCalled();
+      expect(repository.update).toHaveBeenCalledWith('user-123', { email: 'new@example.com' });
     });
   });
 });

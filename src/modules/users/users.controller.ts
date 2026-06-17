@@ -9,10 +9,13 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Post,
 } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto.js';
+import { RequestEmailOtpDto } from './dto/request-email-otp.dto.js';
+import { VerifyEmailOtpDto } from './dto/verify-email-otp.dto.js';
 import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import {
   ApiTags,
@@ -67,6 +70,23 @@ export class UsersController {
   @ApiNotFoundResponse({ description: 'User not found.' })
   updateRole(@Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
     return this.usersService.updateRole(id, dto);
+  }
+
+  @Post(':id/email/request-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request OTP to change global user email (Admin Global Only)' })
+  @ApiOkResponse({ description: 'OTP code generated and sent to the new email address.' })
+  requestEmailOtp(@Param('id') id: string, @Body() dto: RequestEmailOtpDto) {
+    return this.usersService.requestEmailOtp(id, dto);
+  }
+
+  @Patch(':id/email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and update global user email (Admin Global Only)' })
+  @ApiOkResponse({ description: 'User email updated successfully.' })
+  @ApiNotFoundResponse({ description: 'User not found.' })
+  verifyEmailOtp(@Param('id') id: string, @Body() dto: VerifyEmailOtpDto) {
+    return this.usersService.verifyEmailOtp(id, dto);
   }
 
   @Delete(':id')
