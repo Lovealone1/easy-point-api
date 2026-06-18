@@ -8,6 +8,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,21 +24,26 @@ import { AssignOrganizationModuleDto } from './dto/assign-organization-module.dt
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
 import { GlobalRole } from '@prisma/client';
 
 @ApiTags('Organization Modules')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(GlobalRole.ADMIN)
 @Controller('organization-modules')
 export class OrganizationModulesController {
-  constructor(private readonly service: OrganizationModulesService) {}
+  constructor(
+    private readonly service: OrganizationModulesService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * POST /organization-modules
    * Asigna un módulo a una organización de forma atómica e idempotente.
    */
   @Post()
+  @Roles(GlobalRole.ADMIN)
   @HttpCode(HttpStatus.OK) // Usamos 200 OK para soportar el comportamiento idempotente
   @ApiOperation({
     summary: 'Asignar un módulo a una organización (Admin Global Only)',
@@ -55,6 +61,7 @@ export class OrganizationModulesController {
    * Elimina la asignación de un módulo para una organización.
    */
   @Delete(':organizationId/:moduleId')
+  @Roles(GlobalRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Desasignar un módulo de una organización (Admin Global Only)',
@@ -77,12 +84,26 @@ export class OrganizationModulesController {
   @Get(':organizationId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Listar módulos de una organización (Admin Global Only)',
+    summary: 'Listar módulos de una organización (Admin o Miembros)',
     description: 'Retorna los módulos que están activos y asignados para el inquilino indicado.',
   })
   @ApiOkResponse({ description: 'Listado de módulos de la organización' })
   @ApiNotFoundResponse({ description: 'Organización no encontrada' })
-  async getOrgModules(@Param('organizationId') organizationId: string) {
+  async getOrgModules(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() user: any,
+  ) {
+    // Permit access if user is Global Admin
+    if (user.role === GlobalRole.ADMIN) {
+      return this.service.getModulesForOrganization(organizationId);
+    }
+    // Otherwise, check if user is a member of this organization
+    const membership = await this.prisma.organizationUser.count({
+      where: { userId: user.sub || user.id, organizationId },
+    });
+    if (membership === 0) {
+      throw new ForbiddenException('No tienes acceso a esta organización.');
+    }
     return this.service.getModulesForOrganization(organizationId);
   }
 
@@ -91,6 +112,7 @@ export class OrganizationModulesController {
    * Obtiene todas las organizaciones que tienen habilitado un módulo.
    */
   @Get('by-module/:moduleId')
+  @Roles(GlobalRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Listar organizaciones asignadas a un módulo (Admin Global Only)',
