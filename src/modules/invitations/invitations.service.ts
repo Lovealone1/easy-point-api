@@ -17,6 +17,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { InvitationsRepository, InvitationWithOrg } from './invitations.repository.js';
 import { OrganizationUsersRepository } from '../organization-users/organization-users.repository.js';
 import { CreateInvitationDto } from './dto/create-invitation.dto.js';
+import { CreateAdminInvitationDto } from './dto/create-admin-invitation.dto.js';
 import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { getInvitationEmailTemplate } from '../../infraestructure/mail/templates/invitation.template.js';
 
@@ -333,6 +334,67 @@ export class InvitationsService {
     const invitation = await this.invitationsRepository.findById(id);
 
     if (!invitation || invitation.organizationId !== organizationId) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Only pending invitations can be deleted');
+    }
+
+    await this.invitationsRepository.delete(id);
+
+    return {
+      message: 'Invitation deleted successfully',
+    };
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /invitations/admin  (Global Admin Only)
+  // ────────────────────────────────────────────────────────────────────────────
+  async createAdminInvitation(
+    dto: CreateAdminInvitationDto,
+  ): Promise<{ message: string; invitationId: string }> {
+    return this.createInvitation(dto.organizationId, {
+      email: dto.email,
+      role: dto.role,
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /invitations/admin  (Global Admin Only)
+  // ────────────────────────────────────────────────────────────────────────────
+  async findAllGlobal(): Promise<InvitationWithOrg[]> {
+    // Update expired pending invitations globally
+    await this.prismaService.invitation.updateMany({
+      where: {
+        status: InvitationStatus.PENDING,
+        expiresAt: { lt: new Date() },
+      },
+      data: {
+        status: InvitationStatus.EXPIRED,
+      },
+    });
+
+    return this.prismaService.invitation.findMany({
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+        role: {
+          select: { name: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DELETE /invitations/admin/:id  (Global Admin Only)
+  // ────────────────────────────────────────────────────────────────────────────
+  async deleteInvitationGlobal(id: string): Promise<{ message: string }> {
+    const invitation = await this.invitationsRepository.findById(id);
+
+    if (!invitation) {
       throw new NotFoundException('Invitation not found');
     }
 

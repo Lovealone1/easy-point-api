@@ -25,12 +25,16 @@ import {
 
 import { InvitationsService } from './invitations.service.js';
 import { CreateInvitationDto } from './dto/create-invitation.dto.js';
+import { CreateAdminInvitationDto } from './dto/create-admin-invitation.dto.js';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { getTenantId } from '../../common/context/tenant.context.js';
+import { GlobalRole } from '@prisma/client';
 
 @ApiTags('Invitations')
 @ApiSecurity('x-organization-id')
@@ -155,5 +159,56 @@ export class InvitationsController {
       );
     }
     return this.invitationsService.deleteInvitation(id, organizationId);
+  }
+
+  // ── POST /invitations/admin ────────────────────────────────────────────────
+  @Post('admin')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(GlobalRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create invitation globally (Admin Only)',
+    description: 'Creates a pending invitation for an email in any organization.',
+  })
+  @ApiCreatedResponse({ description: 'Invitation created successfully.' })
+  @ApiConflictResponse({ description: 'A pending invitation already exists for this email in that organization.' })
+  @ApiBadRequestResponse({ description: 'Validation error or OWNER role not allowed.' })
+  async createAdminInvitation(
+    @Body() dto: CreateAdminInvitationDto,
+  ) {
+    return this.invitationsService.createAdminInvitation(dto);
+  }
+
+  // ── GET /invitations/admin ─────────────────────────────────────────────────
+  @Get('admin')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(GlobalRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all invitations in the system (Admin Only)',
+    description: 'Lists all invitations across all organizations.',
+  })
+  @ApiOkResponse({ description: 'List of all invitations.' })
+  async getGlobalInvitations() {
+    return this.invitationsService.findAllGlobal();
+  }
+
+  // ── DELETE /invitations/admin/:id ──────────────────────────────────────────
+  @Delete('admin/:id')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(GlobalRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete a pending invitation globally (Admin Only)',
+    description: 'Deletes a pending invitation by ID across any organization.',
+  })
+  @ApiParam({ name: 'id', description: 'Invitation UUID' })
+  @ApiOkResponse({ description: 'Invitation deleted successfully.' })
+  @ApiNotFoundResponse({ description: 'Invitation not found.' })
+  async deleteInvitationGlobal(@Param('id') id: string) {
+    return this.invitationsService.deleteInvitationGlobal(id);
   }
 }
