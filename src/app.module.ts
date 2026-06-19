@@ -45,6 +45,7 @@ import { SystemModulesModule } from './modules/system-modules/system-modules.mod
 import { OrganizationModulesModule } from './modules/organization-modules/organization-modules.module.js';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module.js';
 import { UsersModule } from './modules/users/users.module.js';
+import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { UsersModule } from './modules/users/users.module.js';
     RolePermissionsModule,
     DiscountRulesModule,
     UsersModule,
+    AdminDashboardModule,
   ],
   controllers: [],
   providers: [MailService],
