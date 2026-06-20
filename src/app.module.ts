@@ -46,6 +46,8 @@ import { OrganizationModulesModule } from './modules/organization-modules/organi
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
+import { ExpenseCategoriesModule } from './modules/expense-categories/expense-categories.module.js';
+import { ExpensesModule } from './modules/expenses/expenses.module.js';
 
 @Module({
   imports: [
@@ -105,6 +107,8 @@ import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.
     DiscountRulesModule,
     UsersModule,
     AdminDashboardModule,
+    ExpenseCategoriesModule,
+    ExpensesModule,
   ],
   controllers: [],
   providers: [MailService],
