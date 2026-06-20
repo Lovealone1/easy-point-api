@@ -101,6 +101,8 @@ model Organization {
   discountRules         DiscountRule[]
   appliedDiscounts      AppliedDiscount[]
   organizationModules   OrganizationModule[]
+  expenseCategories     ExpenseCategory[]
+  expenses              Expense[]
 
   @@map("organizations")
 }
@@ -564,6 +566,7 @@ enum OperationType {
   REFUND
   TRANSFER
   ADJUSTMENT
+  EXPENSE
 }
 
 model BankAccount {
@@ -586,6 +589,7 @@ model BankAccount {
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   transactions FinancialTransaction[]
+  expenses     Expense[]
 
   @@index([organizationId])
   @@map("bank_accounts")
@@ -629,6 +633,7 @@ model FinancialTransaction {
   supplyPurchase  SupplyPurchase?
   productPurchase ProductPurchase?
   sale            Sale?
+  expense         Expense?
 
   @@unique([organizationId, transactionNumber])
   @@index([organizationId])
@@ -1220,4 +1225,43 @@ model OrganizationModule {
   @@index([organizationId])
   @@index([moduleId])
   @@map("organization_modules")
+}
+
+model ExpenseCategory {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expenses       Expense[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id             String   @id @default(uuid())
+  organizationId String
+  categoryId     String
+  bankAccountId  String
+  amount         Decimal  @db.Decimal(19, 4)
+  description    String?
+  transactionId  String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category       ExpenseCategory      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  bankAccount    BankAccount          @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  transaction    FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([categoryId])
+  @@index([bankAccountId])
+  @@map("expenses")
 }
