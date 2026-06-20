@@ -24,4 +24,9 @@ export class CreateExpenseDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ description: 'Optional custom date for the expense' })
+  @IsOptional()
+  @IsString()
+  createdAt?: string;
 }

@@ -40,6 +40,7 @@ export interface CreateTransactionParams {
   description?: string;
   metadata?: Record<string, unknown>;
   performedByUserId?: string;
+  createdAt?: Date;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -192,6 +193,7 @@ export class FinancialTransactionsService {
           description: params.description ?? null,
           metadata: params.metadata ? (params.metadata as Prisma.InputJsonValue) : undefined,
           performedByUserId: params.performedByUserId ?? null,
+          createdAt: params.createdAt ?? undefined,
         },
         tx,
       );
