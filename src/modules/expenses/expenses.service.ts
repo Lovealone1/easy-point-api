@@ -55,6 +55,7 @@ export class ExpensesService {
           operationType: OperationType.EXPENSE,
           description: createDto.description ?? `Gasto de categoría: ${category.name}`,
           performedByUserId: userId,
+          createdAt: createDto.createdAt ? new Date(createDto.createdAt) : undefined,
         },
         tx,
       );
@@ -68,6 +69,7 @@ export class ExpensesService {
           amount: new Prisma.Decimal(createDto.amount),
           description: createDto.description ?? null,
           transactionId: transaction.id,
+          createdAt: createDto.createdAt ? new Date(createDto.createdAt) : undefined,
         },
         tx,
       );
