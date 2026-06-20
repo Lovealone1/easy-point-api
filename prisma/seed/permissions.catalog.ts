@@ -664,4 +664,48 @@ export const PERMISSIONS_CATALOG: ModuleDef[] = [
       },
     ],
   },
+  // 31. expense_categories
+  {
+    key: 'expense_categories',
+    name: 'Categorías de Gastos',
+    description: 'Clasificación de conceptos de gastos',
+    icon: 'FolderOpen',
+    sortOrder: 31,
+    features: [
+      {
+        key: 'expense_categories.management',
+        name: 'Categorías de Gastos',
+        description: 'Estructuración de categorías de gastos',
+        sortOrder: 1,
+        permissions: [
+          { key: 'expense_categories:create', name: 'Crear categoría de gasto', type: 'CRUD', sortOrder: 1 },
+          { key: 'expense_categories:read', name: 'Ver categorías de gastos', type: 'CRUD', sortOrder: 2 },
+          { key: 'expense_categories:update', name: 'Editar categoría de gasto', type: 'CRUD', sortOrder: 3 },
+          { key: 'expense_categories:delete', name: 'Eliminar categoría de gasto', type: 'CRUD', sortOrder: 4 },
+        ],
+      },
+    ],
+  },
+  // 32. expenses
+  {
+    key: 'expenses',
+    name: 'Gastos',
+    description: 'Gestión y control de gastos de la organización',
+    icon: 'TrendingDown',
+    sortOrder: 32,
+    features: [
+      {
+        key: 'expenses.management',
+        name: 'Gestión de Gastos',
+        description: 'Registro de gastos y egresos asociados a cuentas bancarias',
+        sortOrder: 1,
+        permissions: [
+          { key: 'expenses:create', name: 'Registrar gasto', type: 'CRUD', sortOrder: 1 },
+          { key: 'expenses:read', name: 'Ver gastos', type: 'CRUD', sortOrder: 2 },
+          { key: 'expenses:update', name: 'Editar gasto', type: 'CRUD', sortOrder: 3 },
+          { key: 'expenses:delete', name: 'Eliminar gasto', type: 'CRUD', sortOrder: 4 },
+        ],
+      },
+    ],
+  },
 ];
