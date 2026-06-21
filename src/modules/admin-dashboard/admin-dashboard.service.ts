@@ -80,22 +80,41 @@ export class AdminDashboardService {
       salesForTrend,
     );
 
-    // 4. Plan distribution
-    const planCounts = await this.prismaService.organization.groupBy({
-      by: ['plan'],
-      _count: { id: true },
+    // 4. Plan distribution based on active subscriptions
+    const activeSubscriptions = await this.prismaService.subscription.findMany({
+      where: {
+        status: 'ACTIVE',
+        currentPeriodEnd: { gte: new Date() },
+      },
+      include: {
+        plan: true,
+      },
     });
-    const planDistribution = planCounts.map(item => ({
-      plan: item.plan,
-      count: item._count.id,
-    }));
 
-    // Ensure all standard plans exist in response
-    ['FREE', 'BASIC', 'PREMIUM'].forEach(planName => {
-      if (!planDistribution.some(p => p.plan === planName)) {
-        planDistribution.push({ plan: planName as any, count: 0 });
-      }
+    const counts: Record<string, number> = {
+      FREE: 0,
+      BASIC: 0,
+      PREMIUM: 0,
+    };
+
+    activeSubscriptions.forEach(sub => {
+      const planName = sub.plan.name.toUpperCase();
+      counts[planName] = (counts[planName] || 0) + 1;
     });
+
+    // Count organizations without active subscriptions as FREE
+    const activeSubOrgIds = new Set(activeSubscriptions.map(s => s.organizationId));
+    const orgsWithoutSub = await this.prismaService.organization.count({
+      where: {
+        id: { notIn: Array.from(activeSubOrgIds) },
+      },
+    });
+    counts.FREE += orgsWithoutSub;
+
+    const planDistribution = Object.entries(counts).map(([plan, count]) => ({
+      plan,
+      count,
+    }));
 
     // 5. Module usage distribution
     const moduleCounts = await this.prismaService.organizationModule.groupBy({
@@ -119,17 +138,33 @@ export class AdminDashboardService {
     }).sort((a, b) => b.count - a.count);
 
     // 6. Recent activities (top 5 organizations)
-    const recentOrganizations = await this.prismaService.organization.findMany({
+    const recentOrgsRaw = await this.prismaService.organization.findMany({
       take: 5,
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        plan: true,
-        status: true,
-        createdAt: true,
+      include: {
+        subscriptions: {
+          where: {
+            status: 'ACTIVE',
+            currentPeriodEnd: { gte: new Date() },
+          },
+          include: {
+            plan: true,
+          },
+        },
       },
+    });
+
+    const recentOrganizations = recentOrgsRaw.map(org => {
+      const activeSub = org.subscriptions?.[0];
+      const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
+      return {
+        id: org.id,
+        name: org.name,
+        email: org.email,
+        plan: planName,
+        status: org.status,
+        createdAt: org.createdAt,
+      };
     });
 
     // Recent activities (top 5 users)
