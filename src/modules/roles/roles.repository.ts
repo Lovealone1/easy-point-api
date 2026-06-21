@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma, Plan } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { RoleEntity } from './domain/role.entity.js';
 
 @Injectable()
@@ -58,22 +58,28 @@ export class RolesRepository {
     return RoleEntity.fromPrisma(raw);
   }
 
-  async getRoleCountAndPlan(organizationId: string): Promise<{ count: number; plan: Plan }> {
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: {
-        plan: true,
-        _count: {
-          select: { roles: true },
+  async getRoleCountAndPlan(organizationId: string): Promise<{ count: number; plan: string }> {
+    const [rolesCount, activeSubscription] = await Promise.all([
+      this.prisma.role.count({
+        where: { organizationId },
+      }),
+      this.prisma.subscription.findFirst({
+        where: {
+          organizationId,
+          status: 'ACTIVE',
+          currentPeriodEnd: { gte: new Date() },
         },
-      },
-    });
-    if (!org) {
-      throw new Error('Organization not found');
-    }
+        include: {
+          plan: true,
+        },
+      }),
+    ]);
+
+    const planName = activeSubscription?.plan?.name?.toUpperCase() ?? 'FREE';
+
     return {
-      count: org._count.roles,
-      plan: org.plan,
+      count: rolesCount,
+      plan: planName,
     };
   }
 }
