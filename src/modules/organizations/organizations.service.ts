@@ -5,7 +5,7 @@ import { UpdateOrganizationPlanDto } from './dto/update-organization-plan.dto.js
 import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
-import { Prisma, Plan } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { OrganizationsRepository } from './organizations.repository.js';
 import { OrganizationEntity } from './domain/organization.entity.js';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
@@ -37,7 +37,7 @@ export class OrganizationsService {
       name: createOrganizationDto.name,
       slug: createOrganizationDto.slug ?? null,
       email: createOrganizationDto.email ?? null,
-      plan: createOrganizationDto.plan ?? Plan.FREE,
+      plan: createOrganizationDto.plan ?? 'FREE',
       planActiveUntil: null,
       status: createOrganizationDto.status ?? 'ACTIVE',
       isActive: true,

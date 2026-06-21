@@ -546,6 +546,15 @@ export class AuthService {
             organization: {
               include: {
                 config: true,
+                subscriptions: {
+                  where: {
+                    status: 'ACTIVE',
+                    currentPeriodEnd: { gte: new Date() },
+                  },
+                  include: {
+                    plan: true,
+                  },
+                },
               },
             },
             role: {
@@ -590,6 +599,10 @@ export class AuthService {
           }
         }
 
+        const activeSub = orgUser.organization.subscriptions?.[0];
+        const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
+        const planActiveUntil = activeSub?.currentPeriodEnd ?? null;
+
         return {
           id: orgUser.organization.id,
           name: orgUser.organization.name,
@@ -610,8 +623,8 @@ export class AuthService {
                 // OrganizationConfig type expects but are not on the config row.
                 organizationName: orgUser.organization.name,
                 organizationEmail: orgUser.organization.email ?? null,
-                plan: orgUser.organization.plan,
-                planActiveUntil: orgUser.organization.planActiveUntil ?? null,
+                plan: planName,
+                planActiveUntil: planActiveUntil,
                 organizationIsActive: orgUser.organization.isActive,
                 organizationCreatedAt: orgUser.organization.createdAt,
               }

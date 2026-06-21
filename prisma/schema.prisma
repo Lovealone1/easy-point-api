@@ -14,11 +14,6 @@ enum GlobalRole {
   USER
 }
 
-enum Plan {
-  FREE
-  BASIC
-  PREMIUM
-}
 
 enum Theme {
   LIGHT
@@ -65,8 +60,6 @@ model Organization {
   name            String
   slug            String?            @unique
   email           String?
-  plan            Plan               @default(FREE)
-  planActiveUntil DateTime?
   status          OrganizationStatus @default(ACTIVE)
   isActive        Boolean            @default(true)
   createdAt       DateTime           @default(now())
@@ -103,6 +96,8 @@ model Organization {
   organizationModules   OrganizationModule[]
   expenseCategories     ExpenseCategory[]
   expenses              Expense[]
+  subscriptions         Subscription[]
+  invoices              Invoice[]
 
   @@map("organizations")
 }
@@ -1265,3 +1260,110 @@ model Expense {
   @@index([bankAccountId])
   @@map("expenses")
 }
+
+model Plan {
+  id           String  @id @default(uuid())
+  name         String  @unique          // e.g. "Free", "Basic", "Premium"
+  description  String?
+  monthlyPrice Decimal @db.Decimal(12, 2)
+  yearlyPrice  Decimal @db.Decimal(12, 2)
+  currency     String  @default("USD") @db.Char(3)
+  isActive     Boolean @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+  TRIALING
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  VOID
+  OVERDUE
+}
+
+model Subscription {
+  id             String @id @default(uuid())
+  organizationId String
+  planId         String
+
+  billingCycle  BillingCycle
+  status        SubscriptionStatus @default(ACTIVE)
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+
+  trialEndsAt DateTime?
+  cancelledAt DateTime?
+  notes       String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices     Invoice[]
+
+  @@index([organizationId])
+  @@index([planId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             String @id @default(uuid())
+  organizationId String
+  subscriptionId String
+
+  invoiceNumber String @unique  // e.g. "INV-2026-001"
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency String  @default("USD") @db.Char(3)
+
+  status    InvoiceStatus @default(PENDING)
+  dueDate   DateTime
+  paidAt    DateTime?
+
+  // Trazabilidad del pago manual (a cuenta independiente)
+  paymentReference  String?   // # transferencia, recibo, etc.
+  paymentMethod     String?   // "Nequi", "Bancolombia", "Efectivo", etc. (libre)
+  paymentNotes      String?
+
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+
+  metadata  Json?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([createdAt])
+  @@map("invoices")
+}
+

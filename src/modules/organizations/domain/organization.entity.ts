@@ -1,4 +1,4 @@
-import { Plan, OrganizationStatus } from '@prisma/client';
+import { OrganizationStatus } from '@prisma/client';
 
 /**
  * Entidad de dominio: Organization
@@ -16,7 +16,7 @@ export class OrganizationEntity {
   name: string;
   slug: string | null;
   email: string | null;
-  plan: Plan;
+  plan: string;
   planActiveUntil: Date | null;
   status: OrganizationStatus;
   isActive: boolean;
@@ -28,7 +28,7 @@ export class OrganizationEntity {
     name: string;
     slug: string | null;
     email: string | null;
-    plan: Plan;
+    plan: string;
     planActiveUntil: Date | null;
     status: OrganizationStatus;
     isActive: boolean;
@@ -61,10 +61,10 @@ export class OrganizationEntity {
    * @param newPlan          Nuevo plan a asignar.
    * @param newActiveUntil   Nueva fecha de expiración (ignorada si plan = FREE).
    */
-  applyPlanChange(newPlan: Plan, newActiveUntil: Date | null | undefined): void {
+  applyPlanChange(newPlan: string, newActiveUntil: Date | null | undefined): void {
     this.plan = newPlan;
 
-    if (newPlan === Plan.FREE) {
+    if (newPlan === 'FREE') {
       // Invariante: plan FREE nunca tiene fecha de expiración
       this.planActiveUntil = null;
     } else {
@@ -106,25 +106,17 @@ export class OrganizationEntity {
    * Construye una OrganizationEntity desde el modelo raw de Prisma.
    * Único punto de entrada desde la base de datos.
    */
-  static fromPrisma(raw: {
-    id: string;
-    name: string;
-    slug: string | null;
-    email: string | null;
-    plan: Plan;
-    planActiveUntil: Date | null;
-    status: OrganizationStatus;
-    isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  }): OrganizationEntity {
+  static fromPrisma(raw: any): OrganizationEntity {
+    const activeSub = raw.subscriptions?.[0];
+    const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
+    const planActiveUntil = activeSub?.currentPeriodEnd ?? null;
     return new OrganizationEntity({
       id: raw.id,
       name: raw.name,
       slug: raw.slug,
       email: raw.email,
-      plan: raw.plan,
-      planActiveUntil: raw.planActiveUntil,
+      plan: planName,
+      planActiveUntil: planActiveUntil,
       status: raw.status,
       isActive: raw.isActive,
       createdAt: raw.createdAt,
