@@ -1,6 +1,6 @@
 import { IsString, IsNotEmpty, MaxLength, IsEmail, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Plan, OrganizationStatus } from '@prisma/client';
+import { OrganizationStatus } from '@prisma/client';
 
 export class CreateOrganizationDto {
   @ApiProperty({ description: 'The name of the organization', example: 'Acme Corp' })
@@ -20,10 +20,10 @@ export class CreateOrganizationDto {
   @MaxLength(255)
   slug?: string;
 
-  @ApiProperty({ enum: Plan, required: false })
-  @IsEnum(Plan)
+  @ApiProperty({ required: false })
+  @IsString()
   @IsOptional()
-  plan?: Plan;
+  plan?: string;
 
   @ApiProperty({ enum: OrganizationStatus, required: false })
   @IsEnum(OrganizationStatus)

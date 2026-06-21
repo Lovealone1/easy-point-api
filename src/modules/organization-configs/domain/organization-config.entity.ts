@@ -1,4 +1,4 @@
-import { Theme, Plan } from '@prisma/client';
+import { Theme } from '@prisma/client';
 
 export class OrganizationConfigEntity {
   readonly id: string;
@@ -21,7 +21,7 @@ export class OrganizationConfigEntity {
 
   readonly organizationName: string;
   readonly organizationEmail: string | null;
-  readonly plan: Plan;
+  readonly plan: string;
   readonly planActiveUntil: Date | null;
   readonly organizationIsActive: boolean;
   readonly organizationCreatedAt?: Date;
@@ -48,7 +48,7 @@ export class OrganizationConfigEntity {
     updatedAt: Date;
     organizationName: string;
     organizationEmail: string | null;
-    plan: Plan;
+    plan: string;
     planActiveUntil: Date | null;
     organizationIsActive: boolean;
     organizationCreatedAt?: Date;
@@ -78,6 +78,9 @@ export class OrganizationConfigEntity {
   }
 
   static fromPrisma(raw: any): OrganizationConfigEntity {
+    const activeSub = raw.organization?.subscriptions?.[0];
+    const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
+    const planActiveUntil = activeSub?.currentPeriodEnd ?? null;
     return new OrganizationConfigEntity({
       id: raw.id,
       organizationId: raw.organizationId,
@@ -97,8 +100,8 @@ export class OrganizationConfigEntity {
       updatedAt: raw.updatedAt,
       organizationName: raw.organization?.name || '',
       organizationEmail: raw.organization?.email || null,
-      plan: raw.organization?.plan || Plan.FREE,
-      planActiveUntil: raw.organization?.planActiveUntil || null,
+      plan: planName,
+      planActiveUntil: planActiveUntil,
       organizationIsActive: raw.organization?.isActive ?? true,
       organizationCreatedAt: raw.organization?.createdAt,
     });
