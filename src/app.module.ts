@@ -48,6 +48,7 @@ import { UsersModule } from './modules/users/users.module.js';
 import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.module.js';
 import { ExpenseCategoriesModule } from './modules/expense-categories/expense-categories.module.js';
 import { ExpensesModule } from './modules/expenses/expenses.module.js';
+import { PlansModule } from './modules/plans/plans.module.js';
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module.js';
     AdminDashboardModule,
     ExpenseCategoriesModule,
     ExpensesModule,
+    PlansModule,
   ],
   controllers: [],
   providers: [MailService],
