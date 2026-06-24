@@ -49,6 +49,8 @@ import { AdminDashboardModule } from './modules/admin-dashboard/admin-dashboard.
 import { ExpenseCategoriesModule } from './modules/expense-categories/expense-categories.module.js';
 import { ExpensesModule } from './modules/expenses/expenses.module.js';
 import { PlansModule } from './modules/plans/plans.module.js';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module.js';
+import { InvoicesModule } from './modules/invoices/invoices.module.js';
 
 @Module({
   imports: [
@@ -111,6 +113,8 @@ import { PlansModule } from './modules/plans/plans.module.js';
     ExpenseCategoriesModule,
     ExpensesModule,
     PlansModule,
+    SubscriptionsModule,
+    InvoicesModule,
   ],
   controllers: [],
   providers: [MailService],
