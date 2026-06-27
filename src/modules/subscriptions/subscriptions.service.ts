@@ -16,7 +16,7 @@ export class SubscriptionsService {
     private readonly subscriptionsRepository: SubscriptionsRepository,
   ) {}
 
-  async create(createDto: CreateSubscriptionDto): Promise<SubscriptionEntity> {
+  async create(userId: string, createDto: CreateSubscriptionDto): Promise<SubscriptionEntity> {
     // 1. Validar que exista la organización
     const org = await this.prisma.organization.findUnique({
       where: { id: createDto.organizationId },
@@ -34,6 +34,18 @@ export class SubscriptionsService {
     }
     if (!plan.isActive) {
       throw new BadRequestException('The selected plan is inactive');
+    }
+
+    // Rule check: if plan is premium, require billing details
+    const isPremium = plan.name.toLowerCase().includes('premium');
+    if (isPremium) {
+      const [natural, juridica] = await Promise.all([
+        this.prisma.personaNaturalBilling.count({ where: { userId } }),
+        this.prisma.personaJuridicaBilling.count({ where: { userId } }),
+      ]);
+      if (natural === 0 && juridica === 0) {
+        throw new BadRequestException('Se requiere configurar la información de facturación electrónica en tu perfil (user-info) antes de adquirir o pagar un plan Premium.');
+      }
     }
 
     // 3. Definir períodos de fechas
@@ -98,7 +110,7 @@ export class SubscriptionsService {
     return record;
   }
 
-  async update(id: string, updateDto: UpdateSubscriptionDto): Promise<SubscriptionEntity> {
+  async update(id: string, updateDto: UpdateSubscriptionDto, userId?: string): Promise<SubscriptionEntity> {
     const subscription = await this.findOne(id);
 
     const updateData: Prisma.SubscriptionUncheckedUpdateInput = {};
@@ -112,6 +124,18 @@ export class SubscriptionsService {
       }
       if (!plan.isActive) {
         throw new BadRequestException('The selected plan is inactive');
+      }
+
+      // Rule check: if plan is premium, require billing details
+      const isPremium = plan.name.toLowerCase().includes('premium');
+      if (isPremium && userId) {
+        const [natural, juridica] = await Promise.all([
+          this.prisma.personaNaturalBilling.count({ where: { userId } }),
+          this.prisma.personaJuridicaBilling.count({ where: { userId } }),
+        ]);
+        if (natural === 0 && juridica === 0) {
+          throw new BadRequestException('Se requiere configurar la información de facturación electrónica en tu perfil (user-info) antes de adquirir o pagar un plan Premium.');
+        }
       }
       updateData.planId = updateDto.planId;
     }

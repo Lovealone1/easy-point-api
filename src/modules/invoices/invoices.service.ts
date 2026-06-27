@@ -15,7 +15,7 @@ export class InvoicesService {
     private readonly invoicesRepository: InvoicesRepository,
   ) {}
 
-  async create(createDto: CreateInvoiceDto): Promise<InvoiceEntity> {
+  async create(createDto: CreateInvoiceDto, userId?: string): Promise<InvoiceEntity> {
     // 1. Validar que exista la organización
     const org = await this.prisma.organization.findUnique({
       where: { id: createDto.organizationId },
@@ -33,6 +33,21 @@ export class InvoicesService {
     }
     if (subscription.organizationId !== createDto.organizationId) {
       throw new BadRequestException('Subscription does not belong to the specified organization');
+    }
+
+    // Rule check: if plan is premium, require billing details
+    const plan = await this.prisma.plan.findUnique({
+      where: { id: subscription.planId },
+    });
+    const isPremium = plan?.name.toLowerCase().includes('premium');
+    if (isPremium && userId) {
+      const [natural, juridica] = await Promise.all([
+        this.prisma.personaNaturalBilling.count({ where: { userId } }),
+        this.prisma.personaJuridicaBilling.count({ where: { userId } }),
+      ]);
+      if (natural === 0 && juridica === 0) {
+        throw new BadRequestException('Se requiere configurar la información de facturación electrónica en tu perfil (user-info) antes de adquirir o pagar un plan Premium.');
+      }
     }
 
     // 3. Validar si la suscripción está pausada
@@ -118,14 +133,9 @@ export class InvoicesService {
 
   async remove(id: string): Promise<InvoiceEntity> {
     const invoice = await this.findOne(id);
-    
-    if (invoice.status === InvoiceStatus.PAID) {
-      throw new BadRequestException('Cannot void a paid invoice');
-    }
-    if (invoice.status === InvoiceStatus.VOID) {
-      throw new BadRequestException('Invoice is already voided');
-    }
-
-    return this.invoicesRepository.updateStatus(id, InvoiceStatus.VOID);
+    await this.prisma.invoice.delete({
+      where: { id },
+    });
+    return invoice;
   }
 }

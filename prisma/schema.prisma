@@ -50,6 +50,8 @@ model User {
   refreshTokens         RefreshToken[]
   createdDiscountRules  DiscountRule[]
   appliedDiscounts      AppliedDiscount[]
+  personaNaturalBilling   PersonaNaturalBilling?
+  personaJuridicaBilling  PersonaJuridicaBilling?
 
   @@map("users")
 }
@@ -1366,4 +1368,72 @@ model Invoice {
   @@index([dueDate])
   @@index([createdAt])
   @@map("invoices")
+}
+
+model PersonaNaturalBilling {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique
+  tipoDocumento           String   // "CC", "CE", "PA", "NIT"
+  numeroDocumento         String
+  primerNombre            String
+  primerApellido          String
+  tipoPersonaNacionalidad String   // "Nacional", "Extranjero"
+  responsabilidadesFiscales String // Códigos separados por comas, ej: "O-13, O-15"
+  regimenTributario       String   // "Régimen Común", "Régimen Simple de Tributación", "No responsable de IVA"
+  regimenFiscalIva        String   // "Responsable de IVA", "No responsable de IVA"
+  correoElectronicoRut    String
+  direccion               String
+  departamento            String
+  municipio               String
+  certificadoFirma        String   // Certificado de firma digital (ruta/URL/base64)
+  modoOperacion           String   // "Proveedor Tecnológico", "Desarrollo Propio", "Facturación Gratuita DIAN"
+  prefijoNumeracion       String
+  rangoDesde              Int
+  rangoHasta              Int
+  resolucionDian          String
+  fechaResolucion         DateTime
+  fechaVigencia           DateTime
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("persona_natural_billing")
+}
+
+model PersonaJuridicaBilling {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique
+  tipoDocumento           String   // "NIT"
+  numeroNit               String
+  digitoVerificacion      String
+  razonSocial             String
+  tipoOrganizacion        String   // "S.A.S.", "S.A.", "Ltda.", "Cooperativa", "Fundación", "ESAL", "Otra"
+  codigoCiiu              String
+  repLegalTipoDoc         String   // "CC", "CE", "PA"
+  repLegalNumeroDoc       String
+  repLegalNombres         String
+  repLegalApellidos       String
+  repLegalEmail           String
+  responsabilidadesFiscales String
+  regimenTributario       String   // "Régimen Ordinario", "Régimen Simple de Tributación"
+  regimenFiscalIva        String   // "Responsable de IVA", "No responsable de IVA"
+  correoElectronicoRut    String
+  direccion               String
+  departamento            String
+  municipio               String
+  certificadoFirma        String
+  modoOperacion           String   // "Proveedor Tecnológico", "Desarrollo Propio", "Facturación Gratuita DIAN"
+  prefijoNumeracion       String
+  rangoDesde              Int
+  rangoHasta              Int
+  resolucionDian          String
+  fechaResolucion         DateTime
+  fechaVigencia           DateTime
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("persona_juridica_billing")
 }

@@ -14,6 +14,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @ApiTags('Invoices')
 @Controller('invoices')
@@ -29,8 +30,11 @@ export class InvoicesController {
   @ApiCreatedResponse({ description: 'Invoice successfully registered.' })
   @ApiBadRequestResponse({ description: 'Invalid payload or subscription paused.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  create(@Body() createInvoiceDto: CreateInvoiceDto) {
-    return this.invoicesService.create(createInvoiceDto);
+  create(
+    @CurrentUser('sub') userId: string,
+    @Body() createInvoiceDto: CreateInvoiceDto,
+  ) {
+    return this.invoicesService.create(createInvoiceDto, userId);
   }
 
   @Get()
