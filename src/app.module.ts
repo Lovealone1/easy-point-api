@@ -51,6 +51,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module.js';
 import { PlansModule } from './modules/plans/plans.module.js';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module.js';
 import { InvoicesModule } from './modules/invoices/invoices.module.js';
+import { UserInfoModule } from './modules/user-info/user-info.module.js';
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module.js';
     PlansModule,
     SubscriptionsModule,
     InvoicesModule,
+    UserInfoModule,
   ],
   controllers: [],
   providers: [MailService],

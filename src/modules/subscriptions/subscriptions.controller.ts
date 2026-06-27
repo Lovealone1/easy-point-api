@@ -15,6 +15,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
 @ApiTags('Subscriptions')
 @Controller('subscriptions')
@@ -30,8 +31,11 @@ export class SubscriptionsController {
   @ApiCreatedResponse({ description: 'Subscription successfully created.' })
   @ApiBadRequestResponse({ description: 'Invalid payload or inactive plan/missing org.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  create(@Body() createSubscriptionDto: CreateSubscriptionDto) {
-    return this.subscriptionsService.create(createSubscriptionDto);
+  create(
+    @CurrentUser('sub') userId: string,
+    @Body() createSubscriptionDto: CreateSubscriptionDto,
+  ) {
+    return this.subscriptionsService.create(userId, createSubscriptionDto);
   }
 
   @Get()
@@ -56,8 +60,12 @@ export class SubscriptionsController {
   @ApiOkResponse({ description: 'Subscription successfully updated.' })
   @ApiNotFoundResponse({ description: 'Subscription not found.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
-  update(@Param('id') id: string, @Body() updateSubscriptionDto: UpdateSubscriptionDto) {
-    return this.subscriptionsService.update(id, updateSubscriptionDto);
+  update(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @Body() updateSubscriptionDto: UpdateSubscriptionDto,
+  ) {
+    return this.subscriptionsService.update(id, updateSubscriptionDto, userId);
   }
 
   @Patch(':id/pause')
