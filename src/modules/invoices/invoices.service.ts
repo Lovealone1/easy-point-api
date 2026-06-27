@@ -118,14 +118,9 @@ export class InvoicesService {
 
   async remove(id: string): Promise<InvoiceEntity> {
     const invoice = await this.findOne(id);
-    
-    if (invoice.status === InvoiceStatus.PAID) {
-      throw new BadRequestException('Cannot void a paid invoice');
-    }
-    if (invoice.status === InvoiceStatus.VOID) {
-      throw new BadRequestException('Invoice is already voided');
-    }
-
-    return this.invoicesRepository.updateStatus(id, InvoiceStatus.VOID);
+    await this.prisma.invoice.delete({
+      where: { id },
+    });
+    return invoice;
   }
 }
