@@ -1290,6 +1290,7 @@ enum SubscriptionStatus {
   EXPIRED
   PAST_DUE
   TRIALING
+  PENDING_PAYMENT
 }
 
 enum InvoiceStatus {
