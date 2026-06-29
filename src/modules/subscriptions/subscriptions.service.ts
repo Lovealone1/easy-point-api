@@ -62,11 +62,14 @@ export class SubscriptionsService {
       }
     }
 
+    const isFree = plan.name.toUpperCase() === 'FREE';
+    const status = createDto.status ?? (isFree ? SubscriptionStatus.ACTIVE : SubscriptionStatus.PENDING_PAYMENT);
+
     return this.subscriptionsRepository.create({
       organizationId: createDto.organizationId,
       planId: createDto.planId,
       billingCycle: createDto.billingCycle,
-      status: createDto.status ?? SubscriptionStatus.ACTIVE,
+      status,
       currentPeriodStart: start,
       currentPeriodEnd: end,
       trialEndsAt: createDto.trialEndsAt ? new Date(createDto.trialEndsAt) : null,
