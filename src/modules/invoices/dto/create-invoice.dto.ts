@@ -23,12 +23,12 @@ export class CreateInvoiceDto {
   @IsString()
   subscriptionId: string;
 
-  @ApiProperty({ description: 'Monto de la factura' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'Monto de la factura' })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  amount: number;
+  amount?: number;
 
   @ApiPropertyOptional({ description: 'Código de moneda de 3 caracteres (ej: COP, USD)', default: 'COP' })
   @IsOptional()
@@ -41,10 +41,10 @@ export class CreateInvoiceDto {
   @IsEnum(InvoiceStatus)
   status?: InvoiceStatus;
 
-  @ApiProperty({ description: 'Fecha de vencimiento' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'Fecha de vencimiento' })
+  @IsOptional()
   @IsDateString()
-  dueDate: string;
+  dueDate?: string;
 
   @ApiPropertyOptional({ description: 'Fecha de pago' })
   @IsOptional()
@@ -66,15 +66,15 @@ export class CreateInvoiceDto {
   @IsString()
   paymentNotes?: string;
 
-  @ApiProperty({ description: 'Inicio del período de facturación' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'Inicio del período de facturación' })
+  @IsOptional()
   @IsDateString()
-  billingPeriodStart: string;
+  billingPeriodStart?: string;
 
-  @ApiProperty({ description: 'Fin del período de facturación' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'Fin del período de facturación' })
+  @IsOptional()
   @IsDateString()
-  billingPeriodEnd: string;
+  billingPeriodEnd?: string;
 
   @ApiPropertyOptional({ description: 'Metadatos adicionales en formato JSON' })
   @IsOptional()
