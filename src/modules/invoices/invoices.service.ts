@@ -6,7 +6,7 @@ import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { InvoiceEntity } from './domain/invoice.entity.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma, InvoiceStatus } from '@prisma/client';
+import { Prisma, InvoiceStatus, SubscriptionStatus } from '@prisma/client';
 
 @Injectable()
 export class InvoicesService {
@@ -27,6 +27,7 @@ export class InvoicesService {
     // 2. Validar que exista la suscripción y pertenezca a la organización
     const subscription = await this.prisma.subscription.findUnique({
       where: { id: createDto.subscriptionId },
+      include: { plan: true },
     });
     if (!subscription) {
       throw new NotFoundException(`Subscription with ID ${createDto.subscriptionId} not found`);
@@ -35,11 +36,13 @@ export class InvoicesService {
       throw new BadRequestException('Subscription does not belong to the specified organization');
     }
 
+    const plan = subscription.plan;
+    if (!plan) {
+      throw new NotFoundException('Plan associated with the subscription not found');
+    }
+
     // Rule check: if plan is premium, require billing details
-    const plan = await this.prisma.plan.findUnique({
-      where: { id: subscription.planId },
-    });
-    const isPremium = plan?.name.toLowerCase().includes('premium');
+    const isPremium = plan.name.toLowerCase().includes('premium');
     if (isPremium && userId) {
       const [natural, juridica] = await Promise.all([
         this.prisma.personaNaturalBilling.count({ where: { userId } }),
@@ -77,23 +80,49 @@ export class InvoicesService {
       paidAt = new Date();
     }
 
-    return this.invoicesRepository.create({
+    // Resolver monto y fechas dinámicamente de la suscripción
+    const resolvedAmount = createDto.amount !== undefined && createDto.amount !== null
+      ? createDto.amount
+      : (subscription.billingCycle === 'MONTHLY' ? plan.monthlyPrice : plan.yearlyPrice);
+
+    const resolvedDueDate = createDto.dueDate
+      ? new Date(createDto.dueDate)
+      : subscription.currentPeriodEnd;
+
+    const resolvedPeriodStart = createDto.billingPeriodStart
+      ? new Date(createDto.billingPeriodStart)
+      : subscription.currentPeriodStart;
+
+    const resolvedPeriodEnd = createDto.billingPeriodEnd
+      ? new Date(createDto.billingPeriodEnd)
+      : subscription.currentPeriodEnd;
+
+    const invoice = await this.invoicesRepository.create({
       organizationId: createDto.organizationId,
       subscriptionId: createDto.subscriptionId,
       invoiceNumber,
-      amount: new Prisma.Decimal(createDto.amount),
+      amount: new Prisma.Decimal(resolvedAmount.toString()),
       currency: createDto.currency ?? 'COP',
       status,
-      dueDate: new Date(createDto.dueDate),
+      dueDate: resolvedDueDate,
       paidAt,
       paymentReference: createDto.paymentReference ?? null,
       paymentMethod: createDto.paymentMethod ?? null,
       paymentNotes: createDto.paymentNotes ?? null,
-      billingPeriodStart: new Date(createDto.billingPeriodStart),
-      billingPeriodEnd: new Date(createDto.billingPeriodEnd),
+      billingPeriodStart: resolvedPeriodStart,
+      billingPeriodEnd: resolvedPeriodEnd,
       notes: createDto.notes ?? null,
       metadata: createDto.metadata ?? null,
     });
+
+    if (status === InvoiceStatus.PAID) {
+      await this.prisma.subscription.update({
+        where: { id: createDto.subscriptionId },
+        data: { status: SubscriptionStatus.ACTIVE },
+      });
+    }
+
+    return invoice;
   }
 
   async findAll(query: FindInvoicesDto): Promise<PageDto<InvoiceEntity>> {

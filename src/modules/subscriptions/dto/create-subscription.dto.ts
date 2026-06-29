@@ -25,7 +25,7 @@ export class CreateSubscriptionDto {
   @IsEnum(BillingCycle)
   billingCycle: BillingCycle;
 
-  @ApiPropertyOptional({ enum: SubscriptionStatus, description: 'Estado de la suscripción', default: SubscriptionStatus.ACTIVE })
+  @ApiPropertyOptional({ enum: SubscriptionStatus, description: 'Estado de la suscripción', default: SubscriptionStatus.PENDING_PAYMENT })
   @IsOptional()
   @IsEnum(SubscriptionStatus)
   status?: SubscriptionStatus;
