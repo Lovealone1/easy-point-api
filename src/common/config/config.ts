@@ -73,6 +73,12 @@ interface AppConfigShape {
     secretAccessKey: string;
     bucketName: string;
   };
+  cron: {
+    subscriptionCheck: string;
+  };
+  subscriptions: {
+    gracePeriodDays: number;
+  };
 }
 
 function getString(key: string, fallback = ''): string {
@@ -222,5 +228,11 @@ export default registerAs('app', (): AppConfig => ({
     accessKeyId: getString('S3_ACCESS_KEY_ID'),
     secretAccessKey: getString('S3_SECRET_ACCESS_KEY'),
     bucketName: getString('S3_BUCKET_NAME'),
+  },
+  cron: {
+    subscriptionCheck: getString('CRON_SUBSCRIPTION_CHECK', '0 0 * * *'),
+  },
+  subscriptions: {
+    gracePeriodDays: getNumber('SUBSCRIPTION_GRACE_PERIOD_DAYS', 3),
   },
 }));
