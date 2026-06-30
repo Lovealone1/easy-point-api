@@ -1324,12 +1324,30 @@ model Subscription {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
   invoices     Invoice[]
+  statusLogs   SubscriptionStatusLog[]
 
   @@index([organizationId])
   @@index([planId])
   @@index([status])
   @@index([currentPeriodEnd])
   @@map("subscriptions")
+}
+
+model SubscriptionStatusLog {
+  id             String             @id @default(uuid())
+  subscriptionId String
+  fromStatus     SubscriptionStatus
+  toStatus       SubscriptionStatus
+  reason         String?
+  triggeredBy    String?            // "cron" | "manual" | "payment"
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([createdAt])
+  @@map("subscription_status_logs")
 }
 
 model Invoice {
