@@ -114,7 +114,8 @@ export class UsersService {
 
     // Send email to newEmail
     const emailSubject = 'Confirmación de Cambio de Correo - Easy Point';
-    const emailHtml = getOtpEmailTemplate(otp, 'CHANGE_EMAIL');
+    const logoUrl = `${this.config.app.apiBaseUrl.replace(/\/api$/, '')}/easypoint-resumed.png`;
+    const emailHtml = getOtpEmailTemplate(otp, 'CHANGE_EMAIL', logoUrl);
     await this.mailService.sendMail(newEmail, emailSubject, emailHtml);
 
     return { message: 'Verification OTP sent to new email' };

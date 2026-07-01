@@ -1,4 +1,4 @@
-export function getOtpEmailTemplate(otp: string, intent: string): string {
+export function getOtpEmailTemplate(otp: string, intent: string, logoUrl: string): string {
   const isRegister = intent === 'REGISTER';
   const isChangeEmail = intent === 'CHANGE_EMAIL';
   const mainTitle = isRegister
@@ -12,10 +12,6 @@ export function getOtpEmailTemplate(otp: string, intent: string): string {
       ? 'Use the code below to confirm and verify your new email address in the administrative panel.'
       : 'Use the code below to verify your identity and complete your login to Easy Point.';
 
-  // We no longer format the OTP with physical spaces. 
-  // Instead, we will use CSS letter-spacing so that when the user double-taps 
-  // or copies the code, it copies as a single continuous string (e.g. "123456").
-
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -27,13 +23,14 @@ export function getOtpEmailTemplate(otp: string, intent: string): string {
     body {
       margin: 0;
       padding: 0;
-      background-color: #f4f4f5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f6f1f9;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
+      color: #38114b;
     }
     .wrapper {
       width: 100%;
-      background-color: #f4f4f5;
+      background-color: #f6f1f9;
       padding: 40px 20px;
       box-sizing: border-box;
     }
@@ -42,51 +39,72 @@ export function getOtpEmailTemplate(otp: string, intent: string): string {
       max-width: 600px;
       margin: 0 auto;
       background-color: #ffffff;
-      border-radius: 12px;
+      border-radius: 18px;
       overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 8px 30px rgba(33, 12, 44, 0.06);
+      border: 1px solid #ead9f2;
     }
     .header {
-      background-color: #3f3f46;
+      background-color: #120717;
       color: #ffffff;
       text-align: center;
       padding: 32px 20px;
     }
+    .header img.logo {
+      height: 40px;
+      margin-bottom: 12px;
+      display: inline-block;
+      vertical-align: middle;
+    }
     .header h1 {
       margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.025em;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #ffffff;
     }
     .header p {
-      margin: 8px 0 0 0;
+      margin: 6px 0 0 0;
       font-size: 11px;
       font-weight: 500;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #a1a1aa;
+      color: #ead9f2;
     }
     .content {
-      padding: 32px 20px;
+      padding: 40px 32px;
       text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background-color: #ead9f2;
+      color: #51156f;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 16px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
     }
     .content h2 {
       margin: 0 0 16px 0;
-      color: #18181b;
-      font-size: 24px;
-      font-weight: 700;
+      color: #120717;
+      font-size: 28px;
+      font-weight: 600;
       letter-spacing: -0.025em;
+      line-height: 1.2;
     }
     .content p.description {
-      margin: 0 0 40px 0;
-      color: #52525b;
-      font-size: 15px;
+      margin: 0 0 32px 0;
+      color: #38114b;
+      font-size: 16px;
       line-height: 1.6;
     }
     .code-container {
-      background-color: #fafafa;
-      border: 1px solid #e4e4e7;
-      border-radius: 12px;
+      background-color: #f6f1f9;
+      border: 1px solid #d6aeea;
+      border-radius: 18px;
       padding: 32px 20px;
       margin: 0 auto;
     }
@@ -95,30 +113,39 @@ export function getOtpEmailTemplate(otp: string, intent: string): string {
       font-weight: 600;
       letter-spacing: 0.15em;
       text-transform: uppercase;
-      color: #a1a1aa;
+      color: #6b1a93;
       margin: 0 0 12px 0;
     }
     .code-container .code {
       font-size: 40px;
       font-weight: 800;
-      letter-spacing: 0.2em; /* CSS letter-spacing instead of physical spaces */
-      color: #18181b;
+      letter-spacing: 0.2em;
+      color: #51156f;
       margin: 0 0 12px 0;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      user-select: all; /* Makes it easy to select the whole code on double tap */
+      user-select: all;
       -webkit-user-select: all;
     }
     .code-container .expires {
       font-size: 13px;
-      color: #a1a1aa;
+      color: #6b1a93;
       margin: 0;
     }
     .footer {
-      padding: 0 32px 32px 32px;
+      background-color: #210c2c;
+      padding: 32px;
       text-align: center;
-      color: #a1a1aa;
+      color: #ead9f2;
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
+    }
+    .footer p {
+      margin: 0 0 8px 0;
+    }
+    .footer p.copyright {
+      margin: 0;
+      color: #bf79e2;
+      font-size: 11px;
     }
   </style>
 </head>
@@ -126,21 +153,24 @@ export function getOtpEmailTemplate(otp: string, intent: string): string {
   <div class="wrapper">
     <div class="main-container">
       <div class="header">
+        <img class="logo" src="\${logoUrl}" alt="Easy Point Logo" />
         <h1>Easy Point Auth</h1>
         <p>Security OTP</p>
       </div>
       <div class="content">
-        <h2>${mainTitle}</h2>
-        <p class="description">${description}</p>
+        <div class="badge">Verification</div>
+        <h2>\${mainTitle}</h2>
+        <p class="description">\${description}</p>
         
         <div class="code-container">
           <p class="label">VERIFICATION CODE</p>
-          <p class="code">${otp}</p>
+          <p class="code">\${otp}</p>
           <p class="expires">Expires in 15 minutes</p>
         </div>
       </div>
       <div class="footer">
-        If you didn't request this code, you can safely ignore this email.
+        <p>If you didn't request this code, you can safely ignore this email.</p>
+        <p class="copyright">&copy; \${new Date().getFullYear()} Easy Point. All rights reserved.</p>
       </div>
     </div>
   </div>
