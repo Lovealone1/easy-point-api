@@ -532,7 +532,8 @@ export class AuthService {
 
   private async sendOtpMail(email: string, intent: string, otp: string) {
     const subject = intent === 'LOGIN' ? 'Access Code - Easy Point' : 'Verify your registration on Easy Point';
-    const html = getOtpEmailTemplate(otp, intent);
+    const logoUrl = `${this.config.app.apiBaseUrl.replace(/\/api$/, '')}/easypoint-resumed.png`;
+    const html = getOtpEmailTemplate(otp, intent, logoUrl);
 
     return this.mailService.sendMail(email, subject, html);
   }
