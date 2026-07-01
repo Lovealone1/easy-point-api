@@ -2,6 +2,7 @@ export function getInvitationEmailTemplate(
   organizationName: string,
   roleName: string,
   invitationLink: string,
+  logoUrl: string,
 ): string {
   return `
 <!DOCTYPE html>
@@ -14,13 +15,14 @@ export function getInvitationEmailTemplate(
     body {
       margin: 0;
       padding: 0;
-      background-color: #f4f4f5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f6f1f9;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
+      color: #38114b;
     }
     .wrapper {
       width: 100%;
-      background-color: #f4f4f5;
+      background-color: #f6f1f9;
       padding: 40px 20px;
       box-sizing: border-box;
     }
@@ -29,84 +31,113 @@ export function getInvitationEmailTemplate(
       max-width: 600px;
       margin: 0 auto;
       background-color: #ffffff;
-      border-radius: 12px;
+      border-radius: 18px;
       overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 8px 30px rgba(33, 12, 44, 0.06);
+      border: 1px solid #ead9f2;
     }
     .header {
-      background-color: #3f3f46;
+      background-color: #120717;
       color: #ffffff;
       text-align: center;
       padding: 32px 20px;
     }
+    .header img.logo {
+      height: 40px;
+      margin-bottom: 12px;
+      display: inline-block;
+      vertical-align: middle;
+    }
     .header h1 {
       margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.025em;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #ffffff;
     }
     .header p {
-      margin: 8px 0 0 0;
+      margin: 6px 0 0 0;
       font-size: 11px;
       font-weight: 500;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #a1a1aa;
+      color: #ead9f2;
     }
     .content {
-      padding: 32px 20px;
+      padding: 40px 32px;
       text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background-color: #ead9f2;
+      color: #51156f;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 16px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
     }
     .content h2 {
       margin: 0 0 16px 0;
-      color: #18181b;
-      font-size: 24px;
-      font-weight: 700;
+      color: #120717;
+      font-size: 28px;
+      font-weight: 600;
       letter-spacing: -0.025em;
+      line-height: 1.2;
     }
     .content p.description {
-      margin: 0 0 40px 0;
-      color: #52525b;
-      font-size: 15px;
+      margin: 0 0 32px 0;
+      color: #38114b;
+      font-size: 16px;
       line-height: 1.6;
     }
     .btn-container {
-      margin: 0 auto;
+      margin: 0 auto 32px auto;
     }
     .btn {
       display: inline-block;
-      background-color: #18181b;
+      background-color: #8b1fc1;
       color: #ffffff;
       text-decoration: none;
       font-size: 16px;
       font-weight: 600;
-      padding: 14px 28px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .btn:hover {
-      background-color: #27272a;
+      padding: 14px 32px;
+      border-radius: 9999px;
+      box-shadow: 0 4px 12px rgba(139, 31, 193, 0.25);
     }
     .link-container {
       margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #ead9f2;
       word-break: break-all;
     }
     .link-container p {
       font-size: 13px;
-      color: #a1a1aa;
-      margin: 0;
+      color: #6b1a93;
+      margin: 0 0 8px 0;
     }
     .link-container a {
       font-size: 13px;
-      color: #3b82f6;
+      color: #8b1fc1;
       text-decoration: underline;
     }
     .footer {
-      padding: 0 32px 32px 32px;
+      background-color: #210c2c;
+      padding: 32px;
       text-align: center;
-      color: #a1a1aa;
+      color: #ead9f2;
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
+    }
+    .footer p {
+      margin: 0 0 8px 0;
+    }
+    .footer p.copyright {
+      margin: 0;
+      color: #bf79e2;
+      font-size: 11px;
     }
   </style>
 </head>
@@ -114,27 +145,30 @@ export function getInvitationEmailTemplate(
   <div class="wrapper">
     <div class="main-container">
       <div class="header">
+        <img class="logo" src="\${logoUrl}" alt="Easy Point Logo" />
         <h1>Easy Point</h1>
         <p>Organization Invitation</p>
       </div>
       <div class="content">
+        <div class="badge">Invitation</div>
         <h2>You've been invited!</h2>
         <p class="description">
-          You have been invited to join <strong>${organizationName}</strong> with the role of <strong>${roleName}</strong>.
+          You have been invited to join <strong>\${organizationName}</strong> with the role of <strong>\${roleName}</strong>.<br>
           Click the button below to accept your invitation and join the organization.
         </p>
         
         <div class="btn-container">
-          <a href="${invitationLink}" class="btn">Accept Invitation</a>
+          <a href="\${invitationLink}" class="btn">Accept Invitation</a>
         </div>
 
         <div class="link-container">
           <p>Or copy and paste this link into your browser:</p>
-          <a href="${invitationLink}">${invitationLink}</a>
+          <a href="\${invitationLink}">\${invitationLink}</a>
         </div>
       </div>
       <div class="footer">
-        If you don't know this organization, you can safely ignore this email.
+        <p>If you don't know this organization, you can safely ignore this email.</p>
+        <p class="copyright">&copy; \${new Date().getFullYear()} Easy Point. All rights reserved.</p>
       </div>
     </div>
   </div>
