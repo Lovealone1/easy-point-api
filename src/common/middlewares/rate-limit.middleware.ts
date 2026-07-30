@@ -179,7 +179,9 @@ export class RateLimitMiddleware implements NestMiddleware {
       requestPath === '/api/docs' ||
       requestPath.startsWith('/api/docs/') ||
       requestPath === '/docs' ||
-      requestPath.startsWith('/docs/')
+      requestPath.startsWith('/docs/') ||
+      requestPath === '/api/v1/health' ||
+      requestPath.startsWith('/api/v1/health/')
     );
   }
 
