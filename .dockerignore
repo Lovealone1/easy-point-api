@@ -17,6 +17,7 @@ coverage
 .agents
 .vscode
 .idea
+.claude
 
 # Logs
 *.log
@@ -27,3 +28,10 @@ coverage
 
 # Prisma output generado localmente (se regenera en el contenedor)
 generated/prisma
+
+# Tests y documentación (no se necesitan en la imagen)
+test
+coverage
+docs
+*.md
+!README.md
