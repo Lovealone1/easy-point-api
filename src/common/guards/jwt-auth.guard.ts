@@ -1,10 +1,12 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { ConfigType } from '@nestjs/config';
 import { Request } from 'express';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
 import appConfig from '../config/config.js';
@@ -14,22 +16,21 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly redisCacheService: RedisCacheService,
+    @Inject(appConfig.KEY)
+    private readonly config: ConfigType<typeof appConfig>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
-    
+
     if (!token) {
       throw new UnauthorizedException('Authentication token is missing');
     }
 
     try {
-      // The secret is retrieved dynamically from environment variables just as configured in the module.
-      // Alternatively, we could inject ConfigType<typeof appConfig> here.
-      // For simplicity, we use the raw access through process.env or fallback.
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'fallback_secreto_desarrollo_temporal',
+        secret: this.config.jwt.secret,
       });
       
       // STATEFUL CHECK: Verify if the session ID (sid) is still active in Redis
