@@ -1,0 +1,30 @@
+# Caddy automatically obtains and renews TLS certificates via Let's Encrypt
+# for any hostname in a site block. DOMAIN and ACME_EMAIL come from .env.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	# If a CDN/proxy (e.g. Cloudflare) sits in front of this VPS, uncomment
+	# and adjust so Caddy resolves the real client IP instead of the proxy's:
+	# trusted_proxies static 173.245.48.0/20 103.21.244.0/22
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	reverse_proxy easy-point-api:3001 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -25,7 +25,7 @@ export class ExpensesService {
       throw new BadRequestException('Missing x-organization-id header');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       // 1. Validar la categoría de gasto
       const category = await tx.expenseCategory.findUnique({
         where: { id: createDto.categoryId },
@@ -134,7 +134,7 @@ export class ExpensesService {
       throw new BadRequestException('Missing x-organization-id header');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       const record = await this.expensesRepository.findById(id, tx);
       if (!record || record.organizationId !== tenantId) {
         throw new NotFoundException(`Expense with ID ${id} not found`);

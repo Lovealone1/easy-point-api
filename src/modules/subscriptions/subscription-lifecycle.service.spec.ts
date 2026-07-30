@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SubscriptionLifecycleService } from './subscription-lifecycle.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { MailService } from '../../infraestructure/mail/mail.service.js';
 import appConfig from '../../common/config/config.js';
 import { SubscriptionStatus } from '@prisma/client';
 
@@ -19,6 +20,13 @@ describe('SubscriptionLifecycleService', () => {
     subscriptionStatusLog: {
       create: jest.fn(),
     },
+    organization: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'org-1',
+        name: 'Test Org',
+        email: 'org@test.com',
+      }),
+    },
     $transaction: jest.fn((cb) => {
       const mockTx = {
         subscription: {
@@ -30,9 +38,27 @@ describe('SubscriptionLifecycleService', () => {
       };
       return cb(mockTx);
     }),
+    $systemTransaction: jest.fn((cb) => {
+      const mockTx = {
+        subscription: {
+          update: mockPrismaService.subscription.update,
+        },
+        subscriptionStatusLog: {
+          create: mockPrismaService.subscriptionStatusLog.create,
+        },
+        organizationUser: {
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+      };
+      return cb(mockTx);
+    }),
   };
 
   const mockConfig = {
+    app: {
+      apiBaseUrl: 'http://localhost:3001/api',
+      frontendUrl: 'http://localhost:3000',
+    },
     cron: {
       subscriptionCheck: '0 0 * * *',
     },
@@ -48,6 +74,10 @@ describe('SubscriptionLifecycleService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: MailService,
+          useValue: { sendMail: jest.fn().mockResolvedValue(true) },
         },
         {
           provide: appConfig.KEY,
@@ -113,8 +143,10 @@ describe('SubscriptionLifecycleService', () => {
 
       const mockSub = {
         id: 'sub-expired',
+        organizationId: 'org-1',
         status: SubscriptionStatus.EXPIRED,
         updatedAt: expiredAt,
+        plan: mockPlan,
         statusLogs: [
           {
             id: 'log-1',

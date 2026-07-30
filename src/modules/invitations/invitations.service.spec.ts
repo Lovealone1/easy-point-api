@@ -22,7 +22,13 @@ describe('InvitationsService', () => {
         InvitationsService,
         {
           provide: appConfig.KEY,
-          useValue: { jwt: { secret: 'secret' }, app: { frontendUrl: 'http://localhost:3000' } },
+          useValue: {
+            jwt: { secret: 'secret' },
+            app: {
+              frontendUrl: 'http://localhost:3000',
+              apiBaseUrl: 'http://localhost:3001/api',
+            },
+          },
         },
         {
           provide: InvitationsRepository,

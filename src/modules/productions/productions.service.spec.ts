@@ -12,6 +12,7 @@ describe('ProductionsService', () => {
 
   const mockPrisma = {
     $transaction: jest.fn(async (cb) => cb(mockPrisma)),
+    $tenantTransaction: jest.fn(async (cb) => cb(mockPrisma)),
     inventoryMovement: { deleteMany: jest.fn() },
     productStock: { update: jest.fn() },
     supplyMovement: { deleteMany: jest.fn() },

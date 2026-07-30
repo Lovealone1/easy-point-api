@@ -67,7 +67,7 @@ export class InventoryMovementsService {
     stock.applyMovement(dto.quantity, mathOperation);
 
     // Using interactive transaction to save both Movement and update Stock safely
-    const movementRaw = await this.prisma.$transaction(async (tx) => {
+    const movementRaw = await this.prisma.$tenantTransaction(async (tx) => {
       // 1. Update Stock
       await tx.productStock.update({
         where: { id: stock.id },

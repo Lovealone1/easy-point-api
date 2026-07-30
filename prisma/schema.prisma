@@ -66,6 +66,13 @@ model Organization {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
+  /// Logical database this organization's data lives in. Every organization
+  /// shares the "default" database today; this is the routing seam that lets a
+  /// specific tenant be pinned to a dedicated database later (contractual or
+  /// regulatory isolation) without touching application code.
+  /// Resolved by DatabaseRegistryService.
+  databaseId String @default("default")
+
   members               OrganizationUser[]
   config                OrganizationConfig?
   invitations           Invitation[]
@@ -100,6 +107,7 @@ model Organization {
   subscriptions         Subscription[]
   invoices              Invoice[]
 
+  @@index([databaseId])
   @@map("organizations")
 }
 

@@ -100,7 +100,7 @@ export class ProductionsService {
 
     const isDraft = dto.status === ProductionStatus.DRAFT;
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       const production = await this.productionsRepository.create(
         {
           organizationId,
@@ -156,7 +156,7 @@ export class ProductionsService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       // Get intended supplies
       const usages = await tx.productionSupplyUsage.findMany({
         where: { productionId: id },
@@ -405,7 +405,7 @@ export class ProductionsService {
     const production = await this.findOne(id);
     
     if (production.isCompleted()) {
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$tenantTransaction(async (tx) => {
         // 1. Revert Inventory Movement & Product Stock (If Sellable)
         if (production.isSellable() && production.productId) {
           const prodId = production.productId;

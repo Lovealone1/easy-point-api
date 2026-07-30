@@ -5,6 +5,7 @@ import { AuditRepository } from './audit.repository';
 import { AuditAction } from './enums/audit-action.enum';
 import { AuditSeverity } from './enums/audit-severity.enum';
 import type { AuditLogEvent } from './interfaces/audit-log-event.interface';
+import appConfig from '../../common/config/config';
 
 const mockEvent: AuditLogEvent = {
   tenantId: 'org-001',
@@ -35,6 +36,7 @@ describe('AuditConsumer', () => {
       providers: [
         AuditConsumer,
         { provide: AuditRepository, useValue: repository },
+        { provide: appConfig.KEY, useValue: { audit: { retentionDays: 30 } } },
       ],
     }).compile();
 

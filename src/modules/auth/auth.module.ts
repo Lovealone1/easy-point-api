@@ -24,7 +24,14 @@ import { InvitationsModule } from '../invitations/invitations.module.js';
     }),
     forwardRef(() => InvitationsModule),
   ],
-  controllers: [AuthController, DevelopmentController],
+  // DevelopmentController exposes debug-only endpoints (plaintext OTP echo,
+  // pending invitation tokens). It must not exist as a route at all outside
+  // development — a runtime env check inside the controller is not enough,
+  // since the route would still be reachable and listed in Swagger.
+  controllers: [
+    AuthController,
+    ...(process.env.NODE_ENV === 'development' ? [DevelopmentController] : []),
+  ],
   providers: [AuthService, MailService],
 })
 export class AuthModule {}

@@ -51,6 +51,7 @@ describe('ExpensesService', () => {
 
     const mockPrisma = {
       $transaction: jest.fn((cb) => cb(mockPrisma)),
+      $tenantTransaction: jest.fn((cb) => cb(mockPrisma)),
       expenseCategory: {
         findUnique: jest.fn(),
       },

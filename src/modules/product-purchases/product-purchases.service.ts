@@ -52,7 +52,7 @@ export class ProductPurchasesService {
 
     const totalAmount = this.calcTotal(dto.items);
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       // 1 — Validate products and upsert stock records
       const stockMap = await this.getOrCreateStocks(organizationId, dto.items, tx);
 
@@ -160,7 +160,7 @@ export class ProductPurchasesService {
     const organizationId = getTenantId();
     if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       const purchase = await this.productPurchasesRepository.findById(id, tx);
       if (!purchase) throw new NotFoundException(`ProductPurchase with ID ${id} not found`);
       if (purchase.organizationId !== organizationId) {
@@ -211,7 +211,7 @@ export class ProductPurchasesService {
     const organizationId = getTenantId();
     if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       const purchase = await this.productPurchasesRepository.findById(id, tx);
       if (!purchase) throw new NotFoundException(`ProductPurchase with ID ${id} not found`);
       if (purchase.organizationId !== organizationId) {
@@ -317,7 +317,7 @@ export class ProductPurchasesService {
     const organizationId = getTenantId();
     if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$tenantTransaction(async (tx) => {
       const purchase = await this.productPurchasesRepository.findById(id, tx);
       if (!purchase || purchase.organizationId !== organizationId) {
         throw new NotFoundException(`ProductPurchase with ID ${id} not found`);

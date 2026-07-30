@@ -29,6 +29,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JsonBodyMiddleware } from './common/middlewares/json-body.middleware.js';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware.js';
 import { RequestInfoMiddleware } from './common/middlewares/request-info.middleware.js';
+import { AuthContextMiddleware } from './common/middlewares/auth-context.middleware.js';
 import { RateLimitMiddleware } from './common/middlewares/rate-limit.middleware.js';
 import { TenantMiddleware } from './common/middlewares/tenant.middleware.js';
 import { RedisModule } from './infraestructure/redis/redis.module.js';
@@ -52,6 +53,7 @@ import { PlansModule } from './modules/plans/plans.module.js';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module.js';
 import { InvoicesModule } from './modules/invoices/invoices.module.js';
 import { UserInfoModule } from './modules/user-info/user-info.module.js';
+import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
   imports: [
@@ -72,6 +74,7 @@ import { UserInfoModule } from './modules/user-info/user-info.module.js';
     }),
     RedisModule,
     PrismaModule,
+    HealthModule,
     // ── Audit (Global — AuditService injectable everywhere) ────────────────
     AuditModule,
     // ── Storage (Global — StorageService injectable everywhere) ────────────
@@ -127,6 +130,7 @@ export class AppModule implements NestModule {
       .apply(
         JsonBodyMiddleware,
         RequestInfoMiddleware,
+        AuthContextMiddleware,
         LoggerMiddleware,
         TenantMiddleware,
         RateLimitMiddleware,

@@ -59,6 +59,7 @@ describe('AuthService', () => {
             user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
             refreshToken: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn(), deleteMany: jest.fn() },
             $transaction: jest.fn().mockImplementation((cb) => cb(prismaService)),
+            $systemTransaction: jest.fn().mockImplementation((cb) => cb(prismaService)),
           },
         },
         {
