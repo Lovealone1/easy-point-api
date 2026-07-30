@@ -69,7 +69,7 @@ export class SubscriptionLifecycleService {
       const oldStatus = sub.status;
       const newStatus = SubscriptionStatus.EXPIRED;
 
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$systemTransaction(async (tx) => {
         // Update subscription status
         await tx.subscription.update({
           where: { id: sub.id },
@@ -159,7 +159,7 @@ export class SubscriptionLifecycleService {
     const newStatus = SubscriptionStatus.CANCELLED;
     const cancelledAt = new Date();
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$systemTransaction(async (tx) => {
       await tx.subscription.update({
         where: { id: subId },
         data: {
@@ -298,20 +298,26 @@ export class SubscriptionLifecycleService {
       return { organization: { id: organizationId, name: '', email: null }, ownerEmail: null, recipients: [] };
     }
 
-    // Find the user with OWNER role in this organization
-    const ownerMembership = await this.prisma.organizationUser.findFirst({
-      where: {
-        organizationId,
-        role: {
-          name: 'OWNER',
+    // Find the user with OWNER role in this organization.
+    // This runs from the subscription cron, which has no tenant context — so it
+    // must declare itself a system operation. Without this, RLS resolves
+    // app.current_org_id to NULL and the lookup silently returns no owner,
+    // meaning expiry notifications would never be sent.
+    const ownerMembership = await this.prisma.$systemTransaction((tx) =>
+      tx.organizationUser.findFirst({
+        where: {
+          organizationId,
+          role: {
+            name: 'OWNER',
+          },
         },
-      },
-      include: {
-        user: {
-          select: { email: true },
+        include: {
+          user: {
+            select: { email: true },
+          },
         },
-      },
-    });
+      }),
+    );
 
     const ownerEmail = ownerMembership?.user?.email ?? null;
 

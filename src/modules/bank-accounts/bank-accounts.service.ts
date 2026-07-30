@@ -20,15 +20,15 @@ export class BankAccountsService {
   ) {}
 
   private getPublicUrl(fileName: string): string {
-    const supabaseUrl = this.configService.get<string>('app.supabase.url') || 'https://suxzoqfxsfgllpvbliof.supabase.co';
-    const bucketName = this.configService.get<string>('app.s3.bucketName') || 'easypoint-media';
+    const supabaseUrl = this.configService.getOrThrow<string>('app.supabase.url');
+    const bucketName = this.configService.getOrThrow<string>('app.s3.bucketName');
     return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${fileName}`;
   }
 
   private getS3Key(qrCodeValue: string): string {
     if (!qrCodeValue) return '';
     if (qrCodeValue.startsWith('http')) {
-      const bucketName = this.configService.get<string>('app.s3.bucketName') || 'easypoint-media';
+      const bucketName = this.configService.getOrThrow<string>('app.s3.bucketName');
       const searchString = `/public/${bucketName}/`;
       const index = qrCodeValue.indexOf(searchString);
       if (index !== -1) {

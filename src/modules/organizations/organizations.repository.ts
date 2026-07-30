@@ -16,130 +16,145 @@ import { OrganizationEntity } from './domain/organization.entity.js';
 export class OrganizationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Creates an organization along with its default roles, module assignments,
+   * subscription and role permissions.
+   *
+   * Runs as a system (cross-tenant) transaction: it bootstraps a brand-new
+   * organization whose id cannot possibly match the caller's current tenant
+   * context. Under RLS, the `role` lookup below would otherwise return zero
+   * rows and the permission wiring would silently do nothing, while the
+   * `rolePermission` insert would be rejected by the policy's WITH CHECK.
+   *
+   * Running it in a single transaction also means a failure part-way through
+   * no longer leaves an organization without its roles or permissions.
+   */
   async create(
     data: any,
   ): Promise<OrganizationEntity> {
     const { plan: planName, planActiveUntil, ...orgData } = data;
     const requestedPlanName = planName?.toUpperCase() ?? 'FREE';
 
-    // 1. Find or create the plan record
-    let planRecord = await this.prisma.plan.findUnique({
-      where: { name: requestedPlanName },
-    });
-
-    if (!planRecord) {
-      planRecord = await this.prisma.plan.create({
-        data: {
-          name: requestedPlanName,
-          description: `Plan ${requestedPlanName}`,
-          monthlyPrice: 0,
-          yearlyPrice: 0,
-          currency: 'USD',
-          isActive: true,
-        },
+    return this.prisma.$systemTransaction(async (tx) => {
+      // 1. Find or create the plan record
+      let planRecord = await tx.plan.findUnique({
+        where: { name: requestedPlanName },
       });
-    }
 
-    const activeModules = await this.prisma.module.findMany({
-      where: { isActive: true },
-      select: { id: true },
-    });
-
-    const now = new Date();
-    // Default period: if free, e.g. 100 years, if paid, 1 month
-    const endPeriod = planActiveUntil ?? (requestedPlanName === 'FREE'
-      ? new Date(now.getFullYear() + 100, now.getMonth(), now.getDate())
-      : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
-
-    const raw = await this.prisma.organization.create({
-      data: {
-        ...orgData,
-        roles: {
-          create: [
-            {
-              name: 'OWNER',
-              description: 'Rol Propietario de la Organización',
-              isSystemDefault: true,
-            },
-            {
-              name: 'ADMINISTRATOR',
-              description: 'Rol Administrador de la Organización',
-              isSystemDefault: true,
-            },
-          ],
-        },
-        organizationModules: {
-          create: activeModules.map((m) => ({
-            moduleId: m.id,
-          })),
-        },
-        subscriptions: {
-          create: [
-            {
-              planId: planRecord.id,
-              billingCycle: 'MONTHLY',
-              status: 'ACTIVE',
-              currentPeriodStart: now,
-              currentPeriodEnd: endPeriod,
-            }
-          ]
-        }
-      },
-      include: {
-        subscriptions: {
-          where: {
-            status: 'ACTIVE',
-            currentPeriodEnd: { gte: now },
+      if (!planRecord) {
+        planRecord = await tx.plan.create({
+          data: {
+            name: requestedPlanName,
+            description: `Plan ${requestedPlanName}`,
+            monthlyPrice: 0,
+            yearlyPrice: 0,
+            currency: 'USD',
+            isActive: true,
           },
-          include: {
-            plan: true,
-          },
-        },
-      },
-    });
-
-    // Wire default permissions for OWNER and ADMINISTRATOR roles
-    const createdRoles = await this.prisma.role.findMany({
-      where: { organizationId: raw.id },
-    });
-    const ownerRole = createdRoles.find((r) => r.name === 'OWNER');
-    const adminRole = createdRoles.find((r) => r.name === 'ADMINISTRATOR');
-
-    const allPermissions = await this.prisma.permission.findMany({
-      where: { isActive: true },
-    });
-
-    const rolePermissionsData: Prisma.RolePermissionCreateManyInput[] = [];
-
-    if (ownerRole) {
-      allPermissions.forEach((p) => {
-        rolePermissionsData.push({
-          roleId: ownerRole.id,
-          permissionId: p.id,
-          organizationId: raw.id,
         });
-      });
-    }
+      }
 
-    if (adminRole) {
-      allPermissions
-        .filter((p) => !p.key.startsWith('organization_users:'))
-        .forEach((p) => {
+      const activeModules = await tx.module.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      });
+
+      const now = new Date();
+      // Default period: if free, e.g. 100 years, if paid, 1 month
+      const endPeriod = planActiveUntil ?? (requestedPlanName === 'FREE'
+        ? new Date(now.getFullYear() + 100, now.getMonth(), now.getDate())
+        : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
+
+      const raw = await tx.organization.create({
+        data: {
+          ...orgData,
+          roles: {
+            create: [
+              {
+                name: 'OWNER',
+                description: 'Rol Propietario de la Organización',
+                isSystemDefault: true,
+              },
+              {
+                name: 'ADMINISTRATOR',
+                description: 'Rol Administrador de la Organización',
+                isSystemDefault: true,
+              },
+            ],
+          },
+          organizationModules: {
+            create: activeModules.map((m) => ({
+              moduleId: m.id,
+            })),
+          },
+          subscriptions: {
+            create: [
+              {
+                planId: planRecord.id,
+                billingCycle: 'MONTHLY',
+                status: 'ACTIVE',
+                currentPeriodStart: now,
+                currentPeriodEnd: endPeriod,
+              }
+            ]
+          }
+        },
+        include: {
+          subscriptions: {
+            where: {
+              status: 'ACTIVE',
+              currentPeriodEnd: { gte: now },
+            },
+            include: {
+              plan: true,
+            },
+          },
+        },
+      });
+
+      // Wire default permissions for OWNER and ADMINISTRATOR roles
+      const createdRoles = await tx.role.findMany({
+        where: { organizationId: raw.id },
+      });
+      const ownerRole = createdRoles.find((r) => r.name === 'OWNER');
+      const adminRole = createdRoles.find((r) => r.name === 'ADMINISTRATOR');
+
+      const allPermissions = await tx.permission.findMany({
+        where: { isActive: true },
+      });
+
+      const rolePermissionsData: Prisma.RolePermissionCreateManyInput[] = [];
+
+      if (ownerRole) {
+        allPermissions.forEach((p) => {
           rolePermissionsData.push({
-            roleId: adminRole.id,
+            roleId: ownerRole.id,
             permissionId: p.id,
             organizationId: raw.id,
           });
         });
-    }
+      }
 
-    if (rolePermissionsData.length > 0) {
-      await this.prisma.rolePermission.createMany({
-        data: rolePermissionsData,
-      });
-    }
+      if (adminRole) {
+        allPermissions
+          .filter((p) => !p.key.startsWith('organization_users:'))
+          .forEach((p) => {
+            rolePermissionsData.push({
+              roleId: adminRole.id,
+              permissionId: p.id,
+              organizationId: raw.id,
+            });
+          });
+      }
 
-    return OrganizationEntity.fromPrisma(raw);
+      if (rolePermissionsData.length > 0) {
+        await tx.rolePermission.createMany({
+          data: rolePermissionsData,
+        });
+      }
+
+      return OrganizationEntity.fromPrisma(raw);
+    });
   }
 
   async findManyWithCount(params: {

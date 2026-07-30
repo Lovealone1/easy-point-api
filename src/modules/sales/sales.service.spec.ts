@@ -26,6 +26,9 @@ describe('SalesService', () => {
     $transaction: jest.fn(async (cb) => {
       return cb(mockPrisma);
     }),
+    $tenantTransaction: jest.fn(async (cb) => {
+      return cb(mockPrisma);
+    }),
     product: { count: jest.fn() },
     productStock: { findUnique: jest.fn(), findMany: jest.fn() },
     inventoryMovement: { findMany: jest.fn(), deleteMany: jest.fn() },
