@@ -159,7 +159,7 @@ export class AuthService {
         throw new UnauthorizedException('User not found. Please register first.');
       }
       if (invitationToken) {
-        await this.prismaService.$transaction(async (tx) => {
+        await this.prismaService.$systemTransaction(async (tx) => {
           await this.invitationsService.acceptInvitationInTransaction(
             tx,
             user!.id,
@@ -171,7 +171,7 @@ export class AuthService {
     } else if (intent === 'REGISTER') {
       if (!user) {
         // Atomic transaction: Create user, and if invitation exists, accept it
-        user = await this.prismaService.$transaction(async (tx) => {
+        user = await this.prismaService.$systemTransaction(async (tx) => {
           const createdUser = await tx.user.create({
             data: { 
               email,
@@ -196,7 +196,7 @@ export class AuthService {
       } else {
         // User already exists. If profile is empty, we can update it.
         // Or if they provided an invitationToken, we can accept it.
-        user = await this.prismaService.$transaction(async (tx) => {
+        user = await this.prismaService.$systemTransaction(async (tx) => {
           let updatedUser = user!;
           
           if (!updatedUser.firstName && !updatedUser.lastName) {

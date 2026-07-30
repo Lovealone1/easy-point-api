@@ -63,7 +63,7 @@ export class SupplyMovementsService {
 
     stock.applyMovement(dto.quantity, mathOperation);
 
-    const movementRaw = await this.prisma.$transaction(async (tx) => {
+    const movementRaw = await this.prisma.$tenantTransaction(async (tx) => {
       // 1. Update Stock
       await tx.supplyStock.update({
         where: { id: stock.id },

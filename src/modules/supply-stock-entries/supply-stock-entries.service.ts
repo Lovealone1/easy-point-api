@@ -39,7 +39,7 @@ export class SupplyStockEntriesService {
     const qty = new Prisma.Decimal(dto.initialQuantity);
     const cost = new Prisma.Decimal(dto.unitCost);
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       const entry = await this.entriesRepository.create(
         {
           organizationId,

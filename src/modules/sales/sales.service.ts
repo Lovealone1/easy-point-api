@@ -114,7 +114,7 @@ export class SalesService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       // 4 — Validate products and resolve stock records
       const stockMap = await this.resolveStocks(organizationId, dto.items, tx);
 
@@ -235,7 +235,7 @@ export class SalesService {
     const organizationId = getTenantId();
     if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       const sale = await this.salesRepository.findById(id, tx);
       if (!sale) throw new NotFoundException(`Sale with ID ${id} not found`);
       if (sale.organizationId !== organizationId) {
@@ -296,7 +296,7 @@ export class SalesService {
     const organizationId = getTenantId();
     if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$tenantTransaction(async (tx) => {
       const sale = await this.salesRepository.findById(id, tx);
       if (!sale) throw new NotFoundException(`Sale with ID ${id} not found`);
       if (sale.organizationId !== organizationId) {
@@ -357,7 +357,7 @@ export class SalesService {
     const organizationId = getTenantId();
     if (!organizationId) throw new BadRequestException('Missing x-organization-id header');
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$tenantTransaction(async (tx) => {
       const sale = await this.salesRepository.findById(id, tx);
       if (!sale || sale.organizationId !== organizationId) {
         throw new NotFoundException(`Sale with ID ${id} not found`);

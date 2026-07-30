@@ -1,7 +1,7 @@
 # 🛡️ Easy Point API — Security Architecture
 
-> **Última actualización:** Junio 2026  
-> **Stack:** NestJS · TypeScript · Prisma · Redis (ioredis) · PostgreSQL · S3 · JWT · Argon2  
+> **Última actualización:** Julio 2026  
+> **Stack:** NestJS · TypeScript · Prisma · Redis (ioredis) · PostgreSQL (self-hosted) · Caddy (TLS) · S3 · JWT · Argon2  
 > **Clasificación:** Documento de Arquitectura de Seguridad (Production-Ready)
 
 ---
@@ -147,12 +147,15 @@ consumer
   .apply(
     JsonBodyMiddleware,       // 1. Límite de payload + tipo de contenido
     RequestInfoMiddleware,    // 2. Extracción de IP y User-Agent
-    LoggerMiddleware,         // 3. Logging HTTP
-    TenantMiddleware,         // 4. Resolución de contexto multi-tenant
-    RateLimitMiddleware,      // 5. Rate limiting por tier
+    AuthContextMiddleware,    // 3. Decodifica el JWT (best-effort) → puebla request.user
+    LoggerMiddleware,         // 4. Logging HTTP
+    TenantMiddleware,         // 5. Resolución de contexto multi-tenant (usa request.user)
+    RateLimitMiddleware,      // 6. Rate limiting por tier (usa request.user)
   )
   .forRoutes('{*path}');
 ```
+
+`AuthContextMiddleware` corre **antes** de los guards y nunca rechaza la request — si el token falta, expiró, o es inválido, simplemente deja `request.user` sin definir y continúa como anónimo. `JwtAuthGuard` sigue siendo la única autoridad que exige autenticación (incluyendo la verificación stateful contra Redis); este middleware solo adelanta el *contexto* para que `TenantMiddleware` y `RateLimitMiddleware` —que corren antes que cualquier guard— puedan usarlo.
 
 ### 3.1 JsonBodyMiddleware — Protección contra Payloads Abusivos
 
@@ -217,9 +220,46 @@ let organizationId =
 
 Almacena el `organizationId` en **AsyncLocalStorage** (`tenantContextStorage.run(state, ...)`), lo que garantiza aislamiento por request y evita contaminación cruzada entre requests concurrentes.
 
+**Bypass de tenant (`x-bypass-tenant`) — solo para Global Admin**
+
+El header `x-bypass-tenant: true` desactiva el filtro automático de `organizationId` en Prisma (ver §13.1). Como `AuthContextMiddleware` corre antes en la cadena, `TenantMiddleware` puede validar el rol del caller antes de honrar ese header:
+
+```typescript
+const bypassRequested = req.headers['x-bypass-tenant'] === 'true';
+const isGlobalAdmin = req.user?.role === GlobalRole.ADMIN;
+const bypassTenant = bypassRequested && isGlobalAdmin;
+```
+
+Un caller que no sea `GlobalRole.ADMIN` puede enviar el header, pero se ignora silenciosamente (con un warning en logs) — nunca puede ver datos fuera de su organización.
+
 ### 3.5 RateLimitMiddleware — Control de Tráfico
 
 Ver sección dedicada: [§7 Rate Limiting](#7-rate-limiting--sistema-multi-tier-basado-en-redis).
+
+### 3.6 AuthContextMiddleware — Contexto de Autenticación Anticipado
+
+**Archivo:** `src/common/middlewares/auth-context.middleware.ts`
+
+```typescript
+async use(request: Request, _response: Response, next: NextFunction): Promise<void> {
+  const token = this.extractToken(request); // Header Bearer o cookie access_token
+
+  if (token) {
+    try {
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: this.config.jwt.secret,
+      });
+      request.user = payload; // ← Disponible para TenantMiddleware y RateLimitMiddleware
+    } catch {
+      // Token inválido/expirado: se ignora. Los guards son quienes rechazan la request.
+    }
+  }
+
+  next();
+}
+```
+
+Este middleware existe porque `TenantMiddleware` y `RateLimitMiddleware` corren **antes** que cualquier guard en la cadena de NestJS, pero ambos necesitan saber quién es el caller (para validar el bypass de tenant y para aplicar límites por usuario en vez de por IP). Es deliberadamente permisivo — nunca lanza excepciones — porque la autorización real sigue siendo responsabilidad exclusiva de `JwtAuthGuard`, que además hace la verificación stateful contra Redis (sesión activa) que este middleware no hace.
 
 ---
 
@@ -683,6 +723,12 @@ Retry-After:           45
 - **Anónimo:** `ratelimit:strict-ip:{clientIp}:{routeScope}:{windowId}`
 - **Global:** `ratelimit:global:{clientIp}:{routeScope}:{windowId}`
 
+### 7.6 Dependencia de `AuthContextMiddleware`
+
+`RateLimitMiddleware` corre **antes** que cualquier guard (ver §3), así que `resolveScopedLimiter()` depende de que `request.user` ya esté poblado para distinguir tráfico autenticado de anónimo. Eso lo hace `AuthContextMiddleware` (§3.6), que corre justo antes en la cadena. Sin él, todo el tráfico —incluso de usuarios logueados— cae en los tiers anónimos (`moderateIp`/`strictIp`), y las escrituras autenticadas quedarían limitadas a **5 req/hora** en vez de 30 req/min.
+
+**Antes de activar `RATE_LIMIT_ENABLED=true` en producción:** confirmar en un entorno de pruebas que un usuario autenticado efectivamente recibe el tier `write-ops`/`readOps` y no `strictIp`/`moderateIp` — es la forma más directa de verificar que el contexto de usuario está llegando correctamente al middleware.
+
 ---
 
 ## 8. Aislamiento Multi-Tenant (Tenant Isolation)
@@ -690,6 +736,53 @@ Retry-After:           45
 ### 8.1 Principio de Diseño
 
 Cada organización en Easy Point es un **tenant completamente aislado**. Ningún usuario puede acceder a los datos de otra organización, incluso si tiene el mismo rol.
+
+El aislamiento se aplica en **dos capas independientes**, y esa independencia es deliberada: si una falla, la otra sigue conteniendo el daño.
+
+| Capa | Dónde | Qué garantiza | Qué NO cubre |
+|---|---|---|---|
+| **Scoping en el ORM** | Extensión Prisma en `prisma.service.ts` | Inyecta `organizationId` por defecto en `where` y en `data` para los 29 modelos tenant-aware | Cualquier cosa que no pase por Prisma; olvidos en modelos no listados |
+| **Row-Level Security** | Políticas en Postgres (migración `enable_rls`) | La base de datos **rechaza** filas de otra organización, aunque la query venga sin filtro por un bug | Tablas exentas a propósito (§8.7) |
+
+**Ambas listas se mantienen sincronizadas por un test** (`src/prisma/tenant-models.spec.ts`): si alguien añade un modelo con `organizationId` y no lo clasifica ni le crea política RLS, la suite falla. Un modelo nuevo sin aislamiento es una fuga silenciosa entre organizaciones; el objetivo es que ese error rompa CI, no producción.
+
+### 8.1.1 Row-Level Security — la garantía dura
+
+La app se conecta como `easypoint_app`, un rol **sin `BYPASSRLS` y que no es dueño de las tablas** (Postgres exime al owner de las políticas — conectarse como owner haría que RLS no hiciera absolutamente nada). Las migraciones siguen corriendo como el owner vía `DIRECT_URL`, que sí está exento a propósito.
+
+```sql
+CREATE POLICY tenant_isolation ON "sales"
+  USING (
+    "organizationId" = current_setting('app.current_org_id', TRUE)
+    OR current_setting('app.bypass_tenant', TRUE) = 'on'
+  )
+  WITH CHECK ( /* mismas condiciones */ );
+```
+
+- `current_setting(..., TRUE)` devuelve `NULL` si la variable no está fijada → la comparación es `NULL` → **cero filas**. **Falla cerrado**: una query sin contexto de tenant no ve nada, en lugar de verlo todo.
+- `WITH CHECK` impide además **escribir** filas de otra organización, no solo leerlas.
+
+### 8.1.2 Propagación del tenant (por transacción, nunca por sesión)
+
+El tenant se publica a Postgres con `set_config(..., TRUE)` — el tercer parámetro lo hace **local a la transacción**. Esto es crítico: un `SET` normal persistiría en la conexión del pool y la siguiente request que la reutilizara heredaría el tenant anterior, que es exactamente la fuga que RLS pretende evitar.
+
+`PrismaService` expone dos helpers, y la distinción entre ellos importa:
+
+```typescript
+// Operaciones de negocio normales: publica el tenant del contexto actual.
+await this.prisma.$tenantTransaction(async (tx) => { /* ... */ });
+
+// Control plane que legítimamente cruza organizaciones.
+await this.prisma.$systemTransaction(async (tx) => { /* ... */ });
+```
+
+Las queries emitidas a través de `tx` **no pasan por la extensión de Prisma**, así que sin estos helpers correrían sin la variable fijada y RLS devolvería cero filas. Todas las transacciones interactivas del proyecto usan uno de los dos; no queda ninguna `$transaction(async ...)` cruda.
+
+`$systemTransaction` está reservado a flujos server-side de confianza y **no es alcanzable desde una cabecera HTTP**:
+
+- **Creación de organizaciones** (`organizations.repository.ts`) — bootstrapea una organización nueva cuyo id no puede coincidir con el tenant del que la crea. Sin bypass, el `role.findMany` posterior devolvería cero filas y los permisos por defecto no se cablearían, en silencio.
+- **Cron de suscripciones** (`subscription-lifecycle.service.ts`) — recorre organizaciones sin contexto de request.
+- **Registro / aceptación de invitación** (`auth.service.ts`) — el usuario todavía no pertenece a la organización.
 
 ### 8.2 AsyncLocalStorage — Context Propagation
 
@@ -742,7 +835,25 @@ const orgUser = await this.prisma.organizationUser.findUnique({
 });
 ```
 
-### 8.5 Validación de Estado de Organización
+### 8.5 Tablas exentas a propósito
+
+Cuatro tablas con `organizationId` quedan **fuera** del scoping automático y de RLS, porque hay flujos legítimos que las leen entre organizaciones. La exención es explícita y está declarada en `TENANT_EXEMPT_MODELS`, no es un olvido:
+
+| Tabla | Por qué |
+|---|---|
+| `invitations` | Se consulta por su token único durante la aceptación, cuando el invitado **todavía no pertenece** a la organización y no hay contexto de tenant. El token es la credencial. |
+| `subscriptions` · `invoices` | Los lee el dashboard de admin global y el cron de suscripciones, por diseño entre organizaciones. |
+| `organization_modules` | Lo resuelve `PermissionsGuard` y lo asignan los admins globales. |
+
+Estas cuatro siguen filtrando por `organizationId` **explícitamente** en sus servicios. La contrapartida es consciente: en ellas la corrección depende del código, no de la base de datos, así que los cambios en esos módulos merecen más escrutinio en revisión.
+
+### 8.6 Separación física por tenant (preparada, no activada)
+
+`Organization.databaseId` (por defecto `"default"`) es el punto de enganche para mover una organización concreta a una base de datos dedicada. Hoy **todas** apuntan a la base compartida y `DatabaseRegistryService` resuelve siempre la misma conexión — sin cambio de comportamiento ni costo.
+
+Existe porque separar bases de datos *por defecto* sería caro y contraproducente a esta escala (cada `PrismaClient` abre su propio pool: 100 tenants ≈ 500 conexiones ≈ 2.5-5 GB de RAM solo en conexiones ociosas, además de migraciones y backups multiplicados por N). El aislamiento fuerte lo da RLS; este seam existe para el caso en que un cliente exija aislamiento físico por contrato o regulación, y entonces se le asigna un `databaseId` propio sin tocar el resto del sistema.
+
+### 8.7 Validación de Estado de Organización
 
 Los guards también verifican que la organización esté activa antes de permitir cualquier operación:
 
@@ -1070,14 +1181,30 @@ if (logoUrl) {
 
 Los usuarios nunca reciben la URL directa del bucket S3 — solo un link temporal con expiración.
 
-### 12.3 Variables de Entorno — Configuración Tipada
+### 12.3 Variables de Entorno — Configuración Tipada y Validación al Arranque
 
 **Archivo:** `src/common/config/config.ts`
 
 Toda la configuración se accede a través del sistema tipado de `@nestjs/config` con el patrón `registerAs`. Nunca se accede directamente a `process.env` en servicios de negocio. Esto garantiza:
 - Validación de tipos en tiempo de compilación
-- Valores de fallback seguros (aunque deben cambiarse en producción)
 - Inyección de dependencias testeables
+
+**Fail-fast en el arranque:** `validateConfig()` corre antes de que la app termine de inicializar y lanza un único error legible listando *todo* lo que falta, en vez de dejar que la app arranque con un valor inseguro o falle más tarde con un stack trace confuso a mitad de un request:
+
+```typescript
+function validateConfig(): void {
+  const missing: string[] = [];
+  // JWT_SECRET / JWT_REFRESH_SECRET: obligatorios, ≥32 caracteres, distintos entre sí
+  // DATABASE_URL / DIRECT_URL: obligatorios siempre
+  // En producción, además: CORS_ORIGINS, SMTP_*, S3_*, REDIS_PASSWORD,
+  // y que API_BASE_URL/FRONTEND_URL usen https://
+  if (missing.length > 0) {
+    throw new Error(`[Config] Cannot start application — missing or invalid environment variables:\n...`);
+  }
+}
+```
+
+`JWT_SECRET` y `JWT_REFRESH_SECRET` **no tienen fallback** — antes existía un valor hardcodeado (`'fallback_secreto_desarrollo_temporal'`) usado tanto en `config.ts` como en `jwt-auth.guard.ts` si la variable de entorno no estaba definida, lo que permitía forjar tokens válidos con solo leer el código fuente. Ambos guards y servicios ahora reciben el secreto exclusivamente vía `ConfigType<typeof appConfig>` inyectado — no hay lectura directa de `process.env.JWT_SECRET` en ningún punto de autenticación.
 
 ---
 
@@ -1085,16 +1212,23 @@ Toda la configuración se accede a través del sistema tipado de `@nestjs/config
 
 ### 13.1 Multi-tenancy en Queries
 
-Todas las consultas de recursos están filtradas implícitamente por `organizationId` a través del contexto del tenant:
+El filtrado por `organizationId` ocurre en tres niveles superpuestos (detalle completo en §8):
 
 ```typescript
-// Ejemplo típico en un repository
+// 1. Explícito en el repository — sigue siendo la forma idiomática
 const sales = await this.prisma.sale.findMany({
-  where: {
-    organizationId: getTenantId(), // ← Siempre aislado por organización
-  }
+  where: { organizationId: getTenantId() },
 });
+
+// 2. Por defecto en el ORM — si el repository lo omite, la extensión de
+//    Prisma lo inyecta a partir del contexto (AsyncLocalStorage)
+const sales = await this.prisma.sale.findMany(); // ← acotado igualmente
+
+// 3. Impuesto por Postgres — aunque un bug se salte 1 y 2, la política RLS
+//    no devuelve filas de otra organización
 ```
+
+La extensión aplica el `organizationId` **solo como valor por defecto**: si el llamador especifica uno explícitamente, se respeta en lugar de sobrescribirlo. Esto importa para flujos que operan legítimamente sobre otra organización (el bootstrap de una organización recién creada, por ejemplo); sobrescribir en silencio redirigiría esas escrituras a la organización equivocada. Lo que hace que un `organizationId` ajeno sea *no autorizado* es RLS, no el ORM.
 
 ### 13.2 Prisma como Capa de Seguridad
 
@@ -1115,41 +1249,57 @@ No existe ningún endpoint público que permita modificar o eliminar registros d
 
 ## 14. Seguridad en Contenedores y DevOps
 
-### 14.1 Dockerfile — Imagen Segura
+Dos imágenes separadas: `Dockerfile.dev` (desarrollo, hot-reload) y `Dockerfile` (producción, multi-stage). Ver [`DEPLOYMENT.md`](./DEPLOYMENT.md) para el procedimiento operativo completo.
+
+### 14.1 Dockerfile de Producción — Multi-Stage, No-Root
 
 ```dockerfile
-FROM node:22-alpine  # ← Imagen Alpine mínima (menor superficie de ataque)
+FROM node:22-alpine AS deps    # instala TODAS las dependencias (necesarias para compilar)
+FROM node:22-alpine AS build   # compila TS + `prisma generate`
+FROM node:22-alpine AS prod-deps  # solo dependencias de producción, natives recompilados
+FROM node:22-alpine AS runner  # imagen final: sin devDependencies, sin toolchain de compilación
 
-RUN apk add --no-cache python3 make g++  # Solo las dependencias estrictamente necesarias
-RUN pnpm install --frozen-lockfile       # ← Lock file garantiza reproducibilidad exacta
+USER node   # ← corre como usuario no-root (antes corría como root)
+
+# Node 22 trae fetch global: el healthcheck no necesita curl en la imagen
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/v1/health')..."
 ```
 
-- **Alpine Linux:** Imagen base mínima, menos paquetes = menos vulnerabilidades
-- **Lockfile:** `pnpm install --frozen-lockfile` previene actualización automática de paquetes no controladas
-- **Non-root user:** *(Recomendación — ver §16)*
+- **Multi-stage:** la imagen final no contiene `python3`/`make`/`g++` (toolchain de compilación de nativos), ni devDependencies (`ts-node`, `jest`) — reduce superficie de ataque y tamaño de imagen.
+- **`prisma generate` en build-time**, no en runtime — antes el `CMD` del Dockerfile de desarrollo ejecutaba `prisma generate` cada vez que arrancaba el contenedor (aceptable en dev, pero no en un contenedor productivo inmutable).
+- **Sin el CLI de Prisma en runtime.** La etapa `prod-deps` copia el cliente ya generado desde `build` (`@prisma/client` + `.prisma`) y elimina explícitamente el CLI, `@prisma/engines`, `studio-core`, `@prisma/dev` y `pglite`. No son alcanzables en ejecución —`@prisma/client` solo depende de `@prisma/client-runtime-utils`, y las queries van por `@prisma/adapter-pg`— y suman ~180 MB de herramientas de desarrollo (incluido Prisma Studio y un Postgres embebido). **Las migraciones se ejecutan por el servicio `migrate` del compose**, que usa la etapa `build`.
+- **`--config.node-linker=hoisted`** en cada `pnpm install`. Sin esto, el cliente de Prisma generado queda dentro del store virtual de pnpm en una ruta con hash (`node_modules/.pnpm/@prisma+client@<hash>/…`), no direccionable de forma estable por `COPY --from`. Con el linker plano, `prod-deps` copia el cliente ya generado desde `build` en una ruta fija en vez de tener que reinstalar el CLI solo para regenerarlo.
+- **Sin `curl`:** el healthcheck usa el `fetch` global de Node 22, evitando un binario extra en la imagen.
+- **Non-root:** corre como el usuario `node` preexistente en la imagen base, no como `root`.
+- **`tini`** como PID 1, para que las señales de shutdown (`SIGTERM`) se propaguen correctamente al proceso Node y `app.enableShutdownHooks()` (ver `main.ts`) pueda cerrar Redis limpiamente.
+- **Tamaño resultante:** 975 MB → **560 MB reales / ~127 MB comprimida**. Detalle del desglose y de una trampa de medición en Docker Desktop/Windows (containerd snapshotter reporta `docker images` de forma inconsistente) en `PROJECT_GLOBAL_CONFIG.md §4.3`.
 
-### 14.2 Docker Compose — Aislamiento de Red
+### 14.2 Docker Compose — Producción sin Puertos Publicados
+
+En `compose.prod.yaml`, `easy-point-api`, `postgres` y `social-redis` **no publican ningún puerto al host** (`ports: !reset []`, sobrescribiendo explícitamente los mappings de `127.0.0.1:PORT` usados en desarrollo). Todo el tráfico entrante pasa por `caddy` (TLS termination + reverse proxy), que es el único servicio con puertos publicados (`80`/`443`):
 
 ```yaml
-networks:
-  easy-point-net:
-    driver: bridge  # Red interna aislada
-
-redis-commander:
+easy-point-api:
+  ports: !reset []       # sin publicar — solo alcanzable dentro de easy-point-net
+postgres:
+  ports: !reset []       # ídem
+caddy:
   ports:
-    - "127.0.0.1:8081:8081"  # ← Solo accessible desde localhost (no expuesto públicamente)
+    - "80:80"
+    - "443:443"
 ```
 
-- Redis Commander solo accesible desde `localhost` (no expuesto en `0.0.0.0`)
-- Todos los servicios en la misma red interna `easy-point-net`
-- Redis usa autenticación por contraseña
+- `!reset []` es el tag de la especificación Compose para limpiar explícitamente una lista heredada del archivo base, en vez de depender de semántica de fusión implícita.
+- En desarrollo, `postgres`, `social-redis` y `redis-commander` publican solo en `127.0.0.1` (nunca en `0.0.0.0`) — anteriormente Redis se publicaba en todas las interfaces.
+- Los servicios de un solo uso (`postgres-backup`, `migrate`) reciben únicamente las variables de entorno que necesitan (credenciales de DB + backup), no el `.env` completo — así un contenedor comprometido en ese perfil no expone `JWT_SECRET`/`SMTP_PASSWORD`/etc.
 
 ### 14.3 .dockerignore y .gitignore
 
-El `.dockerignore` excluye archivos sensibles del contexto de build:
-- `node_modules/`
-- `.env` (variables de entorno no van en la imagen)
-- Archivos de debug y logs
+El `.dockerignore` excluye del contexto de build:
+- `node_modules/`, `dist/`, `coverage/`
+- `.env` y `.env.*` (variables de entorno no van en la imagen; se inyectan vía `env_file`/`environment` en runtime)
+- `docs/`, `test/`, archivos `*.md`, `.claude/`
 
 ---
 
@@ -1209,52 +1359,40 @@ El versionado en URI (`/api/v1/`) permite evolucionar la API sin romper contrato
 
 ## 16. Recomendaciones Adicionales de Seguridad
 
-Las siguientes mejoras son recomendadas para fortalecer aún más la postura de seguridad:
+### ✅ Resueltas (Julio 2026)
 
-### 🔴 Alta Prioridad
+Las siguientes cuatro recomendaciones de Alta Prioridad de esta sección ya están implementadas:
 
-**1. Restringir CORS en Producción**
+| # | Recomendación | Dónde |
+|---|---|---|
+| 1 | CORS restringido por whitelist en vez de `origin: '*'` | `main.ts` — lee `CORS_ORIGINS` de `config.ts`, obligatorio en producción |
+| 2 | `JWT_SECRET`/`JWT_REFRESH_SECRET` sin fallback + validación al arranque | `config.ts` (`validateConfig()`), `jwt-auth.guard.ts` (inyecta config, ya no lee `process.env` directamente) |
+| 3 | Contenedor de producción corre como usuario no-root | `Dockerfile` (`USER node`) |
+| 4 | HTTPS enforced + HSTS | `Caddyfile` — TLS automático vía Let's Encrypt, header `Strict-Transport-Security` |
 
-El CORS actual permite cualquier origen (`origin: '*'`). En producción debe ser estricto:
+Además, en la misma pasada de hardening de deployment se resolvieron estos puntos que no estaban listados explícitamente en esta sección:
 
-```typescript
-// Recomendado para producción
-app.enableCors({
-  origin: [
-    'https://app.easypoint.com',
-    'https://admin.easypoint.com',
-  ],
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-organization-id', 'x-request-id'],
-});
-```
+| Hallazgo | Dónde |
+|---|---|
+| `x-bypass-tenant` sin verificación de rol — cualquiera podía desactivar el filtro multi-tenant | `tenant.middleware.ts` — ahora exige `GlobalRole.ADMIN` (ver §3.4) |
+| Rate limiting por usuario nunca funcionaba (`request.user` no existía en el middleware) | `auth-context.middleware.ts` nuevo (ver §3.6, §7.6) |
+| Swagger/ReDoc expuestos siempre, incluso en producción | `main.ts` + `SWAGGER_ENABLED` en `config.ts` — deshabilitado por defecto en producción |
+| `DevelopmentController` (OTP en texto plano, tokens de invitación) siempre registrado | `auth.module.ts` — el controller no se registra fuera de `NODE_ENV=development` |
+| Sin `trust proxy` — IPs detrás de Caddy no se resolvían correctamente | `main.ts` — `app.set('trust proxy', ...)` vía `TRUST_PROXY` |
+| `pnpm start:prod` no arrancaba (ruta de build incorrecta) | `package.json` — `node dist/src/main.js` |
+| SMTP sin STARTTLS forzado | `mail.service.ts` — `requireTLS` cuando el puerto no es 465 |
 
-**2. Usar Secreto JWT desde Variables de Entorno Forzadas**
+El resto de esta sección se mantiene como registro histórico de la recomendación original, y como referencia de las prioridades restantes.
 
-El código tiene un fallback inseguro en `jwt-auth.guard.ts`:
+### 🔴 Alta Prioridad (histórico)
 
-```typescript
-// ⚠️ ACTUAL — fallback inseguro en código
-secret: process.env.JWT_SECRET || 'fallback_secreto_desarrollo_temporal'
+**1. Restringir CORS en Producción** — ✅ Resuelto, ver tabla arriba.
 
-// ✅ RECOMENDADO — validación al startup
-if (!process.env.JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required in production');
-}
-```
+**2. Usar Secreto JWT desde Variables de Entorno Forzadas** — ✅ Resuelto, ver tabla arriba.
 
-**3. Ejecutar como Non-Root en Docker**
+**3. Ejecutar como Non-Root en Docker** — ✅ Resuelto, ver tabla arriba.
 
-```dockerfile
-# Agregar al Dockerfile de producción
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
-```
-
-**4. HTTPS Enforced en Producción**
-
-Asegurar que el reverse proxy (Nginx/Caddy) redirija HTTP → HTTPS y configure HSTS con `includeSubDomains; preload`.
+**4. HTTPS Enforced en Producción** — ✅ Resuelto, ver tabla arriba.
 
 ### 🟡 Media Prioridad
 

@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import type { ConfigType } from '@nestjs/config';
 import { AUDIT_LOG_EVENT } from './constants/audit-events.constants.js';
 import { AuditRepository } from './audit.repository.js';
 import type { AuditLogEvent } from './interfaces/audit-log-event.interface.js';
 import { AuditAction as PrismaAuditAction, AuditSeverity as PrismaAuditSeverity, Prisma } from '@prisma/client';
-
-const DEFAULT_RETENTION_DAYS = 30;
+import appConfig from '../../common/config/config.js';
 
 /**
  * AuditConsumer — listens to `audit.log` events and fans out to:
@@ -18,7 +18,11 @@ const DEFAULT_RETENTION_DAYS = 30;
 export class AuditConsumer {
   private readonly logger = new Logger(AuditConsumer.name);
 
-  constructor(private readonly auditRepository: AuditRepository) { }
+  constructor(
+    private readonly auditRepository: AuditRepository,
+    @Inject(appConfig.KEY)
+    private readonly config: ConfigType<typeof appConfig>,
+  ) { }
 
   @OnEvent(AUDIT_LOG_EVENT, { async: true })
   async handleAuditEvent(event: AuditLogEvent): Promise<void> {
@@ -89,16 +93,6 @@ export class AuditConsumer {
   }
 
   private resolveRetentionDays(): number {
-    const raw = process.env['AUDIT_LOG_RETENTION_DAYS'];
-    const parsed = raw ? parseInt(raw, 10) : NaN;
-
-    if (isNaN(parsed) || parsed < 1) {
-      this.logger.warn(
-        `[AuditPurge] Invalid AUDIT_LOG_RETENTION_DAYS="${raw}", falling back to ${DEFAULT_RETENTION_DAYS} days.`,
-      );
-      return DEFAULT_RETENTION_DAYS;
-    }
-
-    return parsed;
+    return this.config.audit.retentionDays;
   }
 }

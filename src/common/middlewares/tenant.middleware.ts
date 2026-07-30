@@ -1,13 +1,18 @@
-import { Injectable, NestMiddleware, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NestMiddleware, BadRequestException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { GlobalRole } from '@prisma/client';
 import { tenantContextStorage, TenantContext } from '../context/tenant.context.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
+type RequestWithUser = Request & { user?: { role?: string } };
+
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
+  private readonly logger = new Logger(TenantMiddleware.name);
+
   constructor(private readonly prisma: PrismaService) { }
 
-  async use(req: Request, res: Response, next: NextFunction) {
+  async use(req: RequestWithUser, res: Response, next: NextFunction) {
     let organizationId =
       (req.headers['x-organization-id'] as string) ||
       (req.params?.organizationId as string) ||
@@ -34,7 +39,18 @@ export class TenantMiddleware implements NestMiddleware {
       }
     }
 
-    const bypassTenant = req.headers['x-bypass-tenant'] === 'true';
+    // Only a Global Admin may bypass tenant scoping. AuthContextMiddleware
+    // (which runs before this middleware) populates req.user when a valid
+    // JWT is present, so this is safe to check here.
+    const bypassRequested = req.headers['x-bypass-tenant'] === 'true';
+    const isGlobalAdmin = req.user?.role === GlobalRole.ADMIN;
+    const bypassTenant = bypassRequested && isGlobalAdmin;
+
+    if (bypassRequested && !isGlobalAdmin) {
+      this.logger.warn(
+        `Rejected x-bypass-tenant request from non-admin caller (${req.method} ${req.originalUrl})`,
+      );
+    }
 
     const state: TenantContext = {
       organizationId,
