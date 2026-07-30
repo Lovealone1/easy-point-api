@@ -31,6 +31,7 @@ export class OrganizationsRepository {
    */
   async create(
     data: any,
+    options?: { moduleIds?: string[]; ownerUserId?: string },
   ): Promise<OrganizationEntity> {
     const { plan: planName, planActiveUntil, ...orgData } = data;
     const requestedPlanName = planName?.toUpperCase() ?? 'FREE';
@@ -54,10 +55,15 @@ export class OrganizationsRepository {
         });
       }
 
-      const activeModules = await tx.module.findMany({
-        where: { isActive: true },
-        select: { id: true },
-      });
+      // If moduleIds is provided (self-service flow), assign exactly that set
+      // (admin defaults + user's 5 picks). Otherwise fall back to the historic
+      // behavior of assigning every active module (admin-created orgs).
+      const activeModules = options?.moduleIds
+        ? options.moduleIds.map((id) => ({ id }))
+        : await tx.module.findMany({
+            where: { isActive: true },
+            select: { id: true },
+          });
 
       const now = new Date();
       // Default period: if free, e.g. 100 years, if paid, 1 month
@@ -153,7 +159,78 @@ export class OrganizationsRepository {
         });
       }
 
+      // Self-service flow: the creating user becomes OWNER of their own org.
+      if (options?.ownerUserId && ownerRole) {
+        await tx.organizationUser.create({
+          data: {
+            userId: options.ownerUserId,
+            organizationId: raw.id,
+            roleId: ownerRole.id,
+          },
+        });
+      }
+
       return OrganizationEntity.fromPrisma(raw);
+    });
+  }
+
+  /**
+   * Counts the organizations a user belongs to. Runs as a system transaction
+   * because OrganizationUser is tenant-aware — without a tenant in context
+   * (which a brand-new/org-less user never has) the Prisma RLS extension
+   * would silently scope the count to zero rows regardless of reality.
+   */
+  async countMembershipsForUser(userId: string): Promise<number> {
+    return this.prisma.$systemTransaction((tx) =>
+      tx.organizationUser.count({ where: { userId } }),
+    );
+  }
+
+  /**
+   * Returns all active modules from the global catalog. `Module` is not
+   * tenant-aware, so this is a plain read.
+   */
+  async findActiveModules(): Promise<
+    Array<{
+      id: string;
+      key: string;
+      name: string;
+      description: string | null;
+      icon: string | null;
+      sortOrder: number;
+    }>
+  > {
+    return this.prisma.module.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        description: true,
+        icon: true,
+        sortOrder: true,
+      },
+    });
+  }
+
+  /**
+   * Resolves a unique organization slug, appending `-2`, `-3`, ... when the
+   * base slug is already taken (self-service orgs commonly collide on names
+   * like "Mi Tienda"). Runs as a system transaction since it must be able to
+   * see every organization's slug, not just the caller's tenant.
+   */
+  async resolveUniqueSlug(base: string): Promise<string> {
+    return this.prisma.$systemTransaction(async (tx) => {
+      let candidate = base;
+      let suffix = 2;
+
+      while (await tx.organization.findUnique({ where: { slug: candidate } })) {
+        candidate = `${base}-${suffix}`;
+        suffix += 1;
+      }
+
+      return candidate;
     });
   }
 
