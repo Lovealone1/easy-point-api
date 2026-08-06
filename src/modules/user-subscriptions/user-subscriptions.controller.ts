@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, HttpCode, HttpStatus,
+  Controller, Get, Post, Put, Body, Patch, Param, Delete, UseGuards, Query, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { UserSubscriptionsService } from './user-subscriptions.service.js';
 import { CreateUserSubscriptionDto } from './dto/create-user-subscription.dto.js';
@@ -7,6 +7,9 @@ import { UpdateUserSubscriptionDto } from './dto/update-user-subscription.dto.js
 import { UpdateUserSubscriptionStatusDto } from './dto/update-user-subscription-status.dto.js';
 import { FindUserSubscriptionsDto } from './dto/find-user-subscriptions.dto.js';
 import { GetSubscriptionsSummaryDto } from './dto/get-subscriptions-summary.dto.js';
+import { LogUsageCheckinDto } from './dto/log-usage-checkin.dto.js';
+import { FindUsageCheckinsDto } from './dto/find-usage-checkins.dto.js';
+import { GetCashFlowCalendarDto } from './dto/get-cash-flow-calendar.dto.js';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiBadRequestResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -20,6 +23,9 @@ import { PageDto } from '../../common/pagination/page.dto.js';
 @AllowWithoutSubscription()
 export class UserSubscriptionsController {
   constructor(private readonly subscriptionsService: UserSubscriptionsService) {}
+
+  // NOTE: static routes must be declared before ':id' — Nest/Express would
+  // otherwise match 'summary', 'zombies', 'cash-flow-calendar' as an :id param.
 
   @Get()
   @ApiOperation({ summary: 'List the current user\'s digital subscriptions (paginated)' })
@@ -35,12 +41,50 @@ export class UserSubscriptionsController {
     return this.subscriptionsService.getSummary(userId, query);
   }
 
+  @Get('zombies')
+  @ApiOperation({ summary: 'Active subscriptions with low usage — candidates to cancel' })
+  @ApiOkResponse({ description: 'Zombie candidates computed.' })
+  getZombieCandidates(@CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.getZombieCandidates(userId);
+  }
+
+  @Get('cash-flow-calendar')
+  @ApiOperation({ summary: 'Projected charges for a month, grouped by day and by card billing cycle' })
+  @ApiOkResponse({ description: 'Calendar computed.' })
+  getCashFlowCalendar(@Query() query: GetCashFlowCalendarDto, @CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.getCashFlowCalendar(userId, query);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a subscription by ID' })
   @ApiOkResponse({ description: 'Subscription found.' })
   @ApiNotFoundResponse({ description: 'Subscription not found.' })
   findOne(@Param('id') id: string, @CurrentUser('sub') userId: string) {
-    return this.subscriptionsService.findOneForUser(id, userId);
+    return this.subscriptionsService.getDetailForUser(id, userId);
+  }
+
+  @Get(':id/price-history')
+  @ApiOperation({ summary: 'Price change history for a subscription' })
+  @ApiOkResponse({ description: 'History found.' })
+  @ApiNotFoundResponse({ description: 'Subscription not found.' })
+  getPriceHistory(@Param('id') id: string, @CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.getPriceHistory(id, userId);
+  }
+
+  @Get(':id/usage-checkins')
+  @ApiOperation({ summary: 'Raw usage check-in log for a subscription' })
+  @ApiOkResponse({ description: 'Check-ins found.' })
+  @ApiNotFoundResponse({ description: 'Subscription not found.' })
+  getUsageCheckins(@Param('id') id: string, @Query() query: FindUsageCheckinsDto, @CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.getUsageCheckins(id, userId, query);
+  }
+
+  @Get(':id/usage-stats')
+  @ApiOperation({ summary: 'Derived usage rate and zombie-candidate flag for a subscription' })
+  @ApiOkResponse({ description: 'Stats computed.' })
+  @ApiNotFoundResponse({ description: 'Subscription not found.' })
+  getUsageStats(@Param('id') id: string, @CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.getUsageStats(id, userId);
   }
 
   @Post()
@@ -66,6 +110,14 @@ export class UserSubscriptionsController {
   @ApiNotFoundResponse({ description: 'Subscription not found.' })
   updateStatus(@Param('id') id: string, @Body() dto: UpdateUserSubscriptionStatusDto, @CurrentUser('sub') userId: string) {
     return this.subscriptionsService.updateStatus(id, userId, dto.status);
+  }
+
+  @Put(':id/usage-checkins')
+  @ApiOperation({ summary: 'Log (or correct) a daily usage check-in for a subscription' })
+  @ApiOkResponse({ description: 'Check-in saved.' })
+  @ApiNotFoundResponse({ description: 'Subscription not found.' })
+  logUsageCheckin(@Param('id') id: string, @Body() dto: LogUsageCheckinDto, @CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.logUsageCheckin(id, userId, dto);
   }
 
   @Delete(':id')
