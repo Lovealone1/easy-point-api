@@ -38,20 +38,22 @@ model User {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  organizations         OrganizationUser[]
-  employee              Employee?
-  inventoryMovements    InventoryMovement[]
-  supplyMovements       SupplyMovement[]
-  financialTransactions FinancialTransaction[]
-  supplyPurchases       SupplyPurchase[]
-  productPurchases      ProductPurchase[]
-  sales                 Sale[]
-  productions           Production[]
-  refreshTokens         RefreshToken[]
-  createdDiscountRules  DiscountRule[]
-  appliedDiscounts      AppliedDiscount[]
-  personaNaturalBilling   PersonaNaturalBilling?
-  personaJuridicaBilling  PersonaJuridicaBilling?
+  organizations          OrganizationUser[]
+  employee               Employee?
+  inventoryMovements     InventoryMovement[]
+  supplyMovements        SupplyMovement[]
+  financialTransactions  FinancialTransaction[]
+  supplyPurchases        SupplyPurchase[]
+  productPurchases       ProductPurchase[]
+  sales                  Sale[]
+  productions            Production[]
+  refreshTokens          RefreshToken[]
+  createdDiscountRules   DiscountRule[]
+  appliedDiscounts       AppliedDiscount[]
+  personaNaturalBilling  PersonaNaturalBilling?
+  personaJuridicaBilling PersonaJuridicaBilling?
+  paymentCards           UserPaymentCard[]
+  userSubscriptions      UserSubscription[]
 
   @@map("users")
 }
@@ -1288,7 +1290,9 @@ model Plan {
 }
 
 enum BillingCycle {
+  WEEKLY
   MONTHLY
+  QUARTERLY
   YEARLY
 }
 
@@ -1329,8 +1333,8 @@ model Subscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan                    @relation(fields: [planId], references: [id], onDelete: Restrict)
   invoices     Invoice[]
   statusLogs   SubscriptionStatusLog[]
 
@@ -1347,7 +1351,7 @@ model SubscriptionStatusLog {
   fromStatus     SubscriptionStatus
   toStatus       SubscriptionStatus
   reason         String?
-  triggeredBy    String?            // "cron" | "manual" | "payment"
+  triggeredBy    String? // "cron" | "manual" | "payment"
   metadata       Json?
   createdAt      DateTime           @default(now())
 
@@ -1398,30 +1402,30 @@ model Invoice {
 }
 
 model PersonaNaturalBilling {
-  id                      String   @id @default(uuid())
-  userId                  String   @unique
-  tipoDocumento           String   // "CC", "CE", "PA", "NIT"
-  numeroDocumento         String
-  primerNombre            String
-  primerApellido          String
-  tipoPersonaNacionalidad String   // "Nacional", "Extranjero"
+  id                        String   @id @default(uuid())
+  userId                    String   @unique
+  tipoDocumento             String // "CC", "CE", "PA", "NIT"
+  numeroDocumento           String
+  primerNombre              String
+  primerApellido            String
+  tipoPersonaNacionalidad   String // "Nacional", "Extranjero"
   responsabilidadesFiscales String // Códigos separados por comas, ej: "O-13, O-15"
-  regimenTributario       String   // "Régimen Común", "Régimen Simple de Tributación", "No responsable de IVA"
-  regimenFiscalIva        String   // "Responsable de IVA", "No responsable de IVA"
-  correoElectronicoRut    String
-  direccion               String
-  departamento            String
-  municipio               String
-  certificadoFirma        String   // Certificado de firma digital (ruta/URL/base64)
-  modoOperacion           String   // "Proveedor Tecnológico", "Desarrollo Propio", "Facturación Gratuita DIAN"
-  prefijoNumeracion       String
-  rangoDesde              Int
-  rangoHasta              Int
-  resolucionDian          String
-  fechaResolucion         DateTime
-  fechaVigencia           DateTime
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  regimenTributario         String // "Régimen Común", "Régimen Simple de Tributación", "No responsable de IVA"
+  regimenFiscalIva          String // "Responsable de IVA", "No responsable de IVA"
+  correoElectronicoRut      String
+  direccion                 String
+  departamento              String
+  municipio                 String
+  certificadoFirma          String // Certificado de firma digital (ruta/URL/base64)
+  modoOperacion             String // "Proveedor Tecnológico", "Desarrollo Propio", "Facturación Gratuita DIAN"
+  prefijoNumeracion         String
+  rangoDesde                Int
+  rangoHasta                Int
+  resolucionDian            String
+  fechaResolucion           DateTime
+  fechaVigencia             DateTime
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1429,38 +1433,157 @@ model PersonaNaturalBilling {
 }
 
 model PersonaJuridicaBilling {
-  id                      String   @id @default(uuid())
-  userId                  String   @unique
-  tipoDocumento           String   // "NIT"
-  numeroNit               String
-  digitoVerificacion      String
-  razonSocial             String
-  tipoOrganizacion        String   // "S.A.S.", "S.A.", "Ltda.", "Cooperativa", "Fundación", "ESAL", "Otra"
-  codigoCiiu              String
-  repLegalTipoDoc         String   // "CC", "CE", "PA"
-  repLegalNumeroDoc       String
-  repLegalNombres         String
-  repLegalApellidos       String
-  repLegalEmail           String
+  id                        String   @id @default(uuid())
+  userId                    String   @unique
+  tipoDocumento             String // "NIT"
+  numeroNit                 String
+  digitoVerificacion        String
+  razonSocial               String
+  tipoOrganizacion          String // "S.A.S.", "S.A.", "Ltda.", "Cooperativa", "Fundación", "ESAL", "Otra"
+  codigoCiiu                String
+  repLegalTipoDoc           String // "CC", "CE", "PA"
+  repLegalNumeroDoc         String
+  repLegalNombres           String
+  repLegalApellidos         String
+  repLegalEmail             String
   responsabilidadesFiscales String
-  regimenTributario       String   // "Régimen Ordinario", "Régimen Simple de Tributación"
-  regimenFiscalIva        String   // "Responsable de IVA", "No responsable de IVA"
-  correoElectronicoRut    String
-  direccion               String
-  departamento            String
-  municipio               String
-  certificadoFirma        String
-  modoOperacion           String   // "Proveedor Tecnológico", "Desarrollo Propio", "Facturación Gratuita DIAN"
-  prefijoNumeracion       String
-  rangoDesde              Int
-  rangoHasta              Int
-  resolucionDian          String
-  fechaResolucion         DateTime
-  fechaVigencia           DateTime
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  regimenTributario         String // "Régimen Ordinario", "Régimen Simple de Tributación"
+  regimenFiscalIva          String // "Responsable de IVA", "No responsable de IVA"
+  correoElectronicoRut      String
+  direccion                 String
+  departamento              String
+  municipio                 String
+  certificadoFirma          String
+  modoOperacion             String // "Proveedor Tecnológico", "Desarrollo Propio", "Facturación Gratuita DIAN"
+  prefijoNumeracion         String
+  rangoDesde                Int
+  rangoHasta                Int
+  resolucionDian            String
+  fechaResolucion           DateTime
+  fechaVigencia             DateTime
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("persona_juridica_billing")
+}
+
+// ---------------------------------------------------------------------------
+// Personal space: digital subscription tracking for independent users.
+// None of these models carry organizationId — they are NOT tenant-aware,
+// NOT subject to RLS, and NOT listed in tenant-models.ts. Ownership is
+// enforced in the service/repository layer by filtering on userId from the JWT.
+// ---------------------------------------------------------------------------
+
+model SubscriptionCategory {
+  id        String   @id @default(uuid())
+  key       String   @unique // "entertainment", "ai", "gaming", "fitness"...
+  name      String
+  icon      String?
+  color     String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providers           SubscriptionProvider[]
+  customSubscriptions UserSubscription[]     @relation("CustomSubscriptionCategory")
+
+  @@map("subscription_categories")
+}
+
+model SubscriptionProvider {
+  id          String   @id @default(uuid())
+  key         String   @unique // "netflix", "spotify", "anthropic"...
+  name        String
+  categoryId  String
+  logoUrl     String?
+  brandColor  String?
+  websiteUrl  String?
+  description String?
+  isActive    Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category      SubscriptionCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subscriptions UserSubscription[]
+
+  @@index([categoryId])
+  @@map("subscription_providers")
+}
+
+enum CardBrand {
+  VISA
+  MASTERCARD
+  AMEX
+  DINERS
+  DISCOVER
+  UNIONPAY
+  JCB
+  OTHER
+}
+
+model UserPaymentCard {
+  id             String    @id @default(uuid())
+  userId         String
+  label          String
+  brand          CardBrand
+  color          String    @default("#6366F1")
+  lastFourDigits String?   @db.Char(4)
+  statementDay   Int?
+  paymentDueDay  Int?
+  isDefault      Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions UserSubscription[]
+
+  @@index([userId])
+  @@map("user_payment_cards")
+}
+
+enum UserSubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+model UserSubscription {
+  id               String                 @id @default(uuid())
+  userId           String
+  providerId       String?
+  customName       String?
+  customLogoUrl    String?
+  customCategoryId String?
+  cardId           String?
+  planLabel        String?
+  amount           Decimal                @db.Decimal(12, 2)
+  currency         String                 @default("COP") @db.Char(3)
+  billingCycle     BillingCycle
+  startedAt        DateTime
+  nextBillingDate  DateTime?
+  status           UserSubscriptionStatus @default(ACTIVE)
+  isTrial          Boolean                @default(false)
+  trialEndsAt      DateTime?
+  cancelledAt      DateTime?
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       SubscriptionProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  customCategory SubscriptionCategory? @relation("CustomSubscriptionCategory", fields: [customCategoryId], references: [id], onDelete: SetNull)
+  card           UserPaymentCard?      @relation(fields: [cardId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([cardId])
+  @@index([providerId])
+  @@map("user_subscriptions")
 }
