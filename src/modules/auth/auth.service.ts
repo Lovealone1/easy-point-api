@@ -16,6 +16,7 @@ import { AuditSeverity } from '../../infraestructure/audit/enums/audit-severity.
 import crypto from 'crypto';
 import * as argon2 from 'argon2';
 import { StorageService } from '../../infraestructure/storage/storage.service.js';
+import { resolveSubscriptionState } from '../organizations/domain/subscription-state.js';
 
 export interface SessionMetadata {
   sid: string;
@@ -556,10 +557,8 @@ export class AuthService {
                 include: {
                   config: true,
                   subscriptions: {
-                    where: {
-                      status: 'ACTIVE',
-                      currentPeriodEnd: { gte: new Date() },
-                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
                     include: {
                       plan: true,
                     },
@@ -609,9 +608,7 @@ export class AuthService {
           }
         }
 
-        const activeSub = orgUser.organization.subscriptions?.[0];
-        const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
-        const planActiveUntil = activeSub?.currentPeriodEnd ?? null;
+        const subscriptionState = resolveSubscriptionState(orgUser.organization.subscriptions?.[0]);
 
         return {
           id: orgUser.organization.id,
@@ -633,8 +630,13 @@ export class AuthService {
                 // OrganizationConfig type expects but are not on the config row.
                 organizationName: orgUser.organization.name,
                 organizationEmail: orgUser.organization.email ?? null,
-                plan: planName,
-                planActiveUntil: planActiveUntil,
+                plan: subscriptionState.plan,
+                planActiveUntil: subscriptionState.planActiveUntil,
+                subscriptionStatus: subscriptionState.subscriptionStatus,
+                isTrial: subscriptionState.isTrial,
+                trialEndsAt: subscriptionState.trialEndsAt,
+                trialDaysRemaining: subscriptionState.trialDaysRemaining,
+                accessBlocked: subscriptionState.accessBlocked,
                 organizationIsActive: orgUser.organization.isActive,
                 organizationCreatedAt: orgUser.organization.createdAt,
               }

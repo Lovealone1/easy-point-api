@@ -1,4 +1,5 @@
-import { Theme } from '@prisma/client';
+import { Theme, SubscriptionStatus } from '@prisma/client';
+import { resolveSubscriptionState } from '../../organizations/domain/subscription-state.js';
 
 export class OrganizationConfigEntity {
   readonly id: string;
@@ -23,6 +24,11 @@ export class OrganizationConfigEntity {
   readonly organizationEmail: string | null;
   readonly plan: string;
   readonly planActiveUntil: Date | null;
+  readonly subscriptionStatus: SubscriptionStatus | null;
+  readonly isTrial: boolean;
+  readonly trialEndsAt: Date | null;
+  readonly trialDaysRemaining: number | null;
+  readonly accessBlocked: boolean;
   readonly organizationIsActive: boolean;
   readonly organizationCreatedAt?: Date;
 
@@ -50,6 +56,11 @@ export class OrganizationConfigEntity {
     organizationEmail: string | null;
     plan: string;
     planActiveUntil: Date | null;
+    subscriptionStatus: SubscriptionStatus | null;
+    isTrial: boolean;
+    trialEndsAt: Date | null;
+    trialDaysRemaining: number | null;
+    accessBlocked: boolean;
     organizationIsActive: boolean;
     organizationCreatedAt?: Date;
   }) {
@@ -73,14 +84,17 @@ export class OrganizationConfigEntity {
     this.organizationEmail = params.organizationEmail;
     this.plan = params.plan;
     this.planActiveUntil = params.planActiveUntil;
+    this.subscriptionStatus = params.subscriptionStatus;
+    this.isTrial = params.isTrial;
+    this.trialEndsAt = params.trialEndsAt;
+    this.trialDaysRemaining = params.trialDaysRemaining;
+    this.accessBlocked = params.accessBlocked;
     this.organizationIsActive = params.organizationIsActive;
     this.organizationCreatedAt = params.organizationCreatedAt;
   }
 
   static fromPrisma(raw: any): OrganizationConfigEntity {
-    const activeSub = raw.organization?.subscriptions?.[0];
-    const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
-    const planActiveUntil = activeSub?.currentPeriodEnd ?? null;
+    const subscriptionState = resolveSubscriptionState(raw.organization?.subscriptions?.[0]);
     return new OrganizationConfigEntity({
       id: raw.id,
       organizationId: raw.organizationId,
@@ -100,8 +114,13 @@ export class OrganizationConfigEntity {
       updatedAt: raw.updatedAt,
       organizationName: raw.organization?.name || '',
       organizationEmail: raw.organization?.email || null,
-      plan: planName,
-      planActiveUntil: planActiveUntil,
+      plan: subscriptionState.plan,
+      planActiveUntil: subscriptionState.planActiveUntil,
+      subscriptionStatus: subscriptionState.subscriptionStatus,
+      isTrial: subscriptionState.isTrial,
+      trialEndsAt: subscriptionState.trialEndsAt,
+      trialDaysRemaining: subscriptionState.trialDaysRemaining,
+      accessBlocked: subscriptionState.accessBlocked,
       organizationIsActive: raw.organization?.isActive ?? true,
       organizationCreatedAt: raw.organization?.createdAt,
     });

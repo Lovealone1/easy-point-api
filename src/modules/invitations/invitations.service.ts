@@ -20,6 +20,7 @@ import { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import { CreateAdminInvitationDto } from './dto/create-admin-invitation.dto.js';
 import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { getInvitationEmailTemplate } from '../../infraestructure/mail/templates/invitation.template.js';
+import { assertUserLimitNotExceeded } from '../organizations/domain/user-limit.helper.js';
 
 /** TTL for stored invitation record: 48 hours */
 const INVITATION_TTL_HOURS = 48;
@@ -53,6 +54,8 @@ export class InvitationsService {
     if (role === Role.OWNER) {
       throw new BadRequestException('Cannot invite a user with OWNER role');
     }
+
+    await assertUserLimitNotExceeded(this.prismaService, organizationId);
 
     // Avoid duplicate pending invitations to the same org
     const existing = await this.invitationsRepository.findByEmailAndOrg(

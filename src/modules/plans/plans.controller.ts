@@ -16,9 +16,11 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { GlobalRole } from '@prisma/client';
 import { PageDto } from '../../common/pagination/page.dto.js';
+import { AllowWithoutSubscription } from '../../common/decorators/allow-without-subscription.decorator.js';
 
 @ApiTags('Plans')
 @Controller('plans')
+@AllowWithoutSubscription()
 export class PlansController {
   constructor(private readonly plansService: PlansService) {}
 

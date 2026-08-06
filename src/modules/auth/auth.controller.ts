@@ -8,8 +8,10 @@ import { GenerateOtpDto } from './dto/generate-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { AllowWithoutSubscription } from '../../common/decorators/allow-without-subscription.decorator.js';
 
 @Controller('auth')
+@AllowWithoutSubscription()
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

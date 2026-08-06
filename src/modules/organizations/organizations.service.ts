@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
 import { UpdateOrganizationPlanDto } from './dto/update-organization-plan.dto.js';
@@ -10,10 +10,6 @@ import { Prisma } from '@prisma/client';
 import { OrganizationsRepository } from './organizations.repository.js';
 import { OrganizationEntity } from './domain/organization.entity.js';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
-import {
-  ADMIN_DEFAULT_MODULE_KEYS,
-  BASE_MODULES_SELECTION_SIZE,
-} from './domain/base-modules.constants.js';
 
 /**
  * Service de Organization — capa de aplicación (orquestación).
@@ -127,7 +123,8 @@ export class OrganizationsService {
   ): Promise<OrganizationEntity> {
     const org = await this.findOne(id);
 
-    // La entidad aplica el invariante: FREE → planActiveUntil = null
+    // Si no se provee planActiveUntil, el repositorio calcula el vencimiento
+    // por defecto (7 días de prueba si FREE, +1 mes/año si es un plan pago).
     const newPlan = updatePlanDto.plan ?? org.plan;
     const newActiveUntil = updatePlanDto.planActiveUntil
       ? new Date(updatePlanDto.planActiveUntil)
@@ -140,9 +137,10 @@ export class OrganizationsService {
       planActiveUntil: org.planActiveUntil,
     });
 
-    // Invalidate config cache
+    // Invalidate config + subscription-access caches
     try {
       await this.redisCacheService.delete(`org_config:${id}`);
+      await this.redisCacheService.delete(`subscription_access:${id}`);
     } catch (error) {
       console.error('Failed to invalidate organization config cache:', error);
     }
@@ -169,40 +167,10 @@ export class OrganizationsService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Catalog for the self-service "create your organization" flow: the
-   * admin-governance modules (always on, not selectable) split from the
-   * modules the user may choose their 5 base modules from.
-   */
-  async getSelfServiceCatalog(): Promise<{
-    selectionSize: number;
-    defaultModules: Array<{ id: string; key: string; name: string; description: string | null; icon: string | null }>;
-    selectableModules: Array<{ id: string; key: string; name: string; description: string | null; icon: string | null }>;
-  }> {
-    const modules = await this.organizationsRepository.findActiveModules();
-
-    const project = (m: (typeof modules)[number]) => ({
-      id: m.id,
-      key: m.key,
-      name: m.name,
-      description: m.description,
-      icon: m.icon,
-    });
-
-    return {
-      selectionSize: BASE_MODULES_SELECTION_SIZE,
-      defaultModules: modules
-        .filter((m) => (ADMIN_DEFAULT_MODULE_KEYS as readonly string[]).includes(m.key))
-        .map(project),
-      selectableModules: modules
-        .filter((m) => !(ADMIN_DEFAULT_MODULE_KEYS as readonly string[]).includes(m.key))
-        .map(project),
-    };
-  }
-
-  /**
    * Creates an organization on behalf of an org-less authenticated user.
-   * Always FREE tier, always OWNER for the creator, always the 7
-   * admin-governance modules plus exactly 5 user-chosen modules.
+   * Always FREE tier with a 7-day full-access trial, always OWNER for the
+   * creator, and every active module is assigned — the trial's value
+   * proposition is trying the whole product, not a curated subset.
    */
   async createForUser(
     userId: string,
@@ -212,33 +180,6 @@ export class OrganizationsService {
       await this.organizationsRepository.countMembershipsForUser(userId);
     if (existingMemberships > 0) {
       throw new ConflictException('Ya perteneces a una organización.');
-    }
-
-    const activeModules = await this.organizationsRepository.findActiveModules();
-    const activeModuleIds = new Set(activeModules.map((m) => m.id));
-    const adminDefaultModuleIds = activeModules
-      .filter((m) => (ADMIN_DEFAULT_MODULE_KEYS as readonly string[]).includes(m.key))
-      .map((m) => m.id);
-
-    const uniqueChosenIds = new Set(dto.moduleIds);
-    if (uniqueChosenIds.size !== dto.moduleIds.length) {
-      throw new BadRequestException('No se puede seleccionar el mismo módulo más de una vez.');
-    }
-    if (uniqueChosenIds.size !== BASE_MODULES_SELECTION_SIZE) {
-      throw new BadRequestException(
-        `Debes seleccionar exactamente ${BASE_MODULES_SELECTION_SIZE} módulos base.`,
-      );
-    }
-
-    for (const moduleId of uniqueChosenIds) {
-      if (!activeModuleIds.has(moduleId)) {
-        throw new BadRequestException(`El módulo '${moduleId}' no existe o no está activo.`);
-      }
-      if (adminDefaultModuleIds.includes(moduleId)) {
-        throw new BadRequestException(
-          'Los módulos de administración ya están incluidos por defecto; no deben seleccionarse.',
-        );
-      }
     }
 
     const entity = new OrganizationEntity({
@@ -268,7 +209,6 @@ export class OrganizationsService {
         isActive: entity.isActive,
       },
       {
-        moduleIds: [...adminDefaultModuleIds, ...uniqueChosenIds],
         ownerUserId: userId,
       },
     );

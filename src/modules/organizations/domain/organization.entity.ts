@@ -1,4 +1,5 @@
 import { OrganizationStatus } from '@prisma/client';
+import { resolveSubscriptionState } from './subscription-state.js';
 
 /**
  * Entidad de dominio: Organization
@@ -52,28 +53,22 @@ export class OrganizationEntity {
   // ---------------------------------------------------------------------------
 
   /**
-   * Cambia el plan de la organización aplicando el invariante:
-   *  - Si el nuevo plan es FREE → planActiveUntil se fuerza a null
-   *    (los planes FREE no tienen fecha de expiración).
-   *  - Para cualquier otro plan → planActiveUntil se actualiza con el
-   *    valor provisto (puede ser null si el admin decide no establecer fecha).
+   * Cambia el plan de la organización. FREE es un periodo de prueba de 7
+   * días, no un plan sin vencimiento: su planActiveUntil se calcula igual
+   * que el de un plan pago (ver OrganizationsRepository), salvo que se
+   * provea explícitamente. Aquí solo se respeta el valor entregado.
    *
    * @param newPlan          Nuevo plan a asignar.
-   * @param newActiveUntil   Nueva fecha de expiración (ignorada si plan = FREE).
+   * @param newActiveUntil   Nueva fecha de expiración (undefined = no modificar la actual).
    */
   applyPlanChange(newPlan: string, newActiveUntil: Date | null | undefined): void {
     this.plan = newPlan;
 
-    if (newPlan === 'FREE') {
-      // Invariante: plan FREE nunca tiene fecha de expiración
-      this.planActiveUntil = null;
-    } else {
-      // Para planes de pago, se respeta el valor provisto
-      if (newActiveUntil !== undefined) {
-        this.planActiveUntil = newActiveUntil;
-      }
-      // Si newActiveUntil === undefined: no se modifica planActiveUntil actual
+    if (newActiveUntil !== undefined) {
+      this.planActiveUntil = newActiveUntil;
     }
+    // Si newActiveUntil === undefined: no se modifica planActiveUntil actual
+    // (el repositorio calculará el vencimiento por defecto: +7d trial FREE, +1 mes/año pago).
   }
 
   // ---------------------------------------------------------------------------
@@ -107,16 +102,14 @@ export class OrganizationEntity {
    * Único punto de entrada desde la base de datos.
    */
   static fromPrisma(raw: any): OrganizationEntity {
-    const activeSub = raw.subscriptions?.[0];
-    const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
-    const planActiveUntil = activeSub?.currentPeriodEnd ?? null;
+    const { plan, planActiveUntil } = resolveSubscriptionState(raw.subscriptions?.[0]);
     return new OrganizationEntity({
       id: raw.id,
       name: raw.name,
       slug: raw.slug,
       email: raw.email,
-      plan: planName,
-      planActiveUntil: planActiveUntil,
+      plan,
+      planActiveUntil,
       status: raw.status,
       isActive: raw.isActive,
       createdAt: raw.createdAt,

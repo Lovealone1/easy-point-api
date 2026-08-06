@@ -1,5 +1,7 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { SubscriptionAccessGuard } from './common/guards/subscription-access.guard.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
@@ -122,7 +124,10 @@ import { HealthModule } from './modules/health/health.module.js';
     UserInfoModule,
   ],
   controllers: [],
-  providers: [MailService],
+  providers: [
+    MailService,
+    { provide: APP_GUARD, useClass: SubscriptionAccessGuard },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

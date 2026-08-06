@@ -43,7 +43,9 @@ export class SubscriptionLifecycleService {
     this.logger.log('Validating subscriptions for expiration checks...');
     const today = new Date();
 
-    // Find subscriptions that are due/past their end period and are in active/trialing/pending payment states
+    // Find subscriptions that are due/past their end period and are in active/trialing/pending payment states.
+    // FREE plans are no longer excluded: FREE is a 7-day trial (TRIALING) and
+    // must expire like any other subscription once currentPeriodEnd is reached.
     const dueSubscriptions = await this.prisma.subscription.findMany({
       where: {
         currentPeriodEnd: {
@@ -58,16 +60,12 @@ export class SubscriptionLifecycleService {
       },
     });
 
-    // Don't expire FREE plans
-    const nonFreeDueSubs = dueSubscriptions.filter(
-      sub => !sub.plan.name.toLowerCase().includes('free')
-    );
+    this.logger.log(`Found ${dueSubscriptions.length} subscription(s) due for expiration (currentPeriodEnd <= ${today.toISOString()}).`);
 
-    this.logger.log(`Found ${nonFreeDueSubs.length} subscription(s) due for expiration (currentPeriodEnd <= ${today.toISOString()}).`);
-
-    for (const sub of nonFreeDueSubs) {
+    for (const sub of dueSubscriptions) {
       const oldStatus = sub.status;
       const newStatus = SubscriptionStatus.EXPIRED;
+      const isTrial = oldStatus === SubscriptionStatus.TRIALING;
 
       await this.prisma.$systemTransaction(async (tx) => {
         // Update subscription status
@@ -82,7 +80,9 @@ export class SubscriptionLifecycleService {
             subscriptionId: sub.id,
             fromStatus: oldStatus,
             toStatus: newStatus,
-            reason: 'Subscription period ended (currentPeriodEnd reached)',
+            reason: isTrial
+              ? 'Trial period ended (currentPeriodEnd reached)'
+              : 'Subscription period ended (currentPeriodEnd reached)',
             triggeredBy: 'cron',
           },
         });
@@ -91,7 +91,7 @@ export class SubscriptionLifecycleService {
       this.logger.log(`Subscription ${sub.id} transitioned from ${oldStatus} to EXPIRED.`);
 
       // Send renewal reminder emails (grace period days = days left to renew before cancellation)
-      await this.sendRenewalReminderEmails(sub.id, sub.organizationId, sub.plan.name);
+      await this.sendRenewalReminderEmails(sub.id, sub.organizationId, sub.plan.name, isTrial);
     }
   }
 
@@ -193,6 +193,7 @@ export class SubscriptionLifecycleService {
     subscriptionId: string,
     organizationId: string,
     planName: string,
+    isTrial = false,
   ) {
     try {
       const gracePeriodDays = this.config.subscriptions.gracePeriodDays;
@@ -222,7 +223,9 @@ export class SubscriptionLifecycleService {
         logoUrl,
       });
 
-      const subject = `⚠️ Tu suscripción a ${planName} ha expirado — te quedan ${gracePeriodDays} días para renovar`;
+      const subject = isTrial
+        ? `⚠️ Tu prueba gratuita de EasyPoint ha terminado — te quedan ${gracePeriodDays} días para elegir un plan`
+        : `⚠️ Tu suscripción a ${planName} ha expirado — te quedan ${gracePeriodDays} días para renovar`;
 
       for (const email of recipients) {
         await this.mailService.sendMail(email, subject, html);
