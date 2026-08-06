@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
 import { UpdateOrganizationPlanDto } from './dto/update-organization-plan.dto.js';
+import { CreateMyOrganizationDto } from './dto/create-my-organization.dto.js';
 import { PageOptionsDto } from '../../common/pagination/page-options.dto.js';
 import { PageDto } from '../../common/pagination/page.dto.js';
 import { PageMetaDto } from '../../common/pagination/page-meta.dto.js';
@@ -122,7 +123,8 @@ export class OrganizationsService {
   ): Promise<OrganizationEntity> {
     const org = await this.findOne(id);
 
-    // La entidad aplica el invariante: FREE → planActiveUntil = null
+    // Si no se provee planActiveUntil, el repositorio calcula el vencimiento
+    // por defecto (7 días de prueba si FREE, +1 mes/año si es un plan pago).
     const newPlan = updatePlanDto.plan ?? org.plan;
     const newActiveUntil = updatePlanDto.planActiveUntil
       ? new Date(updatePlanDto.planActiveUntil)
@@ -135,9 +137,10 @@ export class OrganizationsService {
       planActiveUntil: org.planActiveUntil,
     });
 
-    // Invalidate config cache
+    // Invalidate config + subscription-access caches
     try {
       await this.redisCacheService.delete(`org_config:${id}`);
+      await this.redisCacheService.delete(`subscription_access:${id}`);
     } catch (error) {
       console.error('Failed to invalidate organization config cache:', error);
     }
@@ -157,5 +160,57 @@ export class OrganizationsService {
     }
 
     return deleted;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Self-service organization creation (any authenticated user, org-less)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Creates an organization on behalf of an org-less authenticated user.
+   * Always FREE tier with a 7-day full-access trial, always OWNER for the
+   * creator, and every active module is assigned — the trial's value
+   * proposition is trying the whole product, not a curated subset.
+   */
+  async createForUser(
+    userId: string,
+    dto: CreateMyOrganizationDto,
+  ): Promise<OrganizationEntity> {
+    const existingMemberships =
+      await this.organizationsRepository.countMembershipsForUser(userId);
+    if (existingMemberships > 0) {
+      throw new ConflictException('Ya perteneces a una organización.');
+    }
+
+    const entity = new OrganizationEntity({
+      id: '',
+      name: dto.name,
+      slug: null,
+      email: dto.email ?? null,
+      plan: 'FREE',
+      planActiveUntil: null,
+      status: 'ACTIVE',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    entity.assignAutoSlug();
+    entity.slug = await this.organizationsRepository.resolveUniqueSlug(entity.slug!);
+
+    return this.organizationsRepository.create(
+      {
+        name: entity.name,
+        slug: entity.slug,
+        email: entity.email,
+        plan: entity.plan,
+        planActiveUntil: entity.planActiveUntil,
+        status: entity.status,
+        isActive: entity.isActive,
+      },
+      {
+        ownerUserId: userId,
+      },
+    );
   }
 }

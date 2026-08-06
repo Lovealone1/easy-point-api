@@ -16,6 +16,7 @@ import { AuditSeverity } from '../../infraestructure/audit/enums/audit-severity.
 import crypto from 'crypto';
 import * as argon2 from 'argon2';
 import { StorageService } from '../../infraestructure/storage/storage.service.js';
+import { resolveSubscriptionState } from '../organizations/domain/subscription-state.js';
 
 export interface SessionMetadata {
   sid: string;
@@ -539,32 +540,39 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
-    const user = await this.prismaService.user.findUnique({
-      where: { id: userId },
-      include: {
-        organizations: {
-          include: {
-            organization: {
-              include: {
-                config: true,
-                subscriptions: {
-                  where: {
-                    status: 'ACTIVE',
-                    currentPeriodEnd: { gte: new Date() },
-                  },
-                  include: {
-                    plan: true,
+    // A user's own profile legitimately spans every organization they
+    // belong to — it is not scoped to a single tenant. `User` itself isn't
+    // a tenant-aware model, so the Prisma extension never sets the RLS GUC
+    // for this call; without it, the RLS policies on the nested
+    // organization_users/organization_configs/role_permissions relations
+    // silently return zero rows. $systemTransaction publishes
+    // app.bypass_tenant for the whole query so those relations resolve.
+    const user = await this.prismaService.$systemTransaction((tx) =>
+      tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          organizations: {
+            include: {
+              organization: {
+                include: {
+                  config: true,
+                  subscriptions: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                    include: {
+                      plan: true,
+                    },
                   },
                 },
               },
-            },
-            role: {
-              include: {
-                rolePermissions: {
-                  where: { permission: { isActive: true } },
-                  include: {
-                    permission: {
-                      select: { key: true },
+              role: {
+                include: {
+                  rolePermissions: {
+                    where: { permission: { isActive: true } },
+                    include: {
+                      permission: {
+                        select: { key: true },
+                      },
                     },
                   },
                 },
@@ -572,8 +580,8 @@ export class AuthService {
             },
           },
         },
-      },
-    });
+      }),
+    );
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -600,9 +608,7 @@ export class AuthService {
           }
         }
 
-        const activeSub = orgUser.organization.subscriptions?.[0];
-        const planName = activeSub?.plan?.name?.toUpperCase() ?? 'FREE';
-        const planActiveUntil = activeSub?.currentPeriodEnd ?? null;
+        const subscriptionState = resolveSubscriptionState(orgUser.organization.subscriptions?.[0]);
 
         return {
           id: orgUser.organization.id,
@@ -624,8 +630,13 @@ export class AuthService {
                 // OrganizationConfig type expects but are not on the config row.
                 organizationName: orgUser.organization.name,
                 organizationEmail: orgUser.organization.email ?? null,
-                plan: planName,
-                planActiveUntil: planActiveUntil,
+                plan: subscriptionState.plan,
+                planActiveUntil: subscriptionState.planActiveUntil,
+                subscriptionStatus: subscriptionState.subscriptionStatus,
+                isTrial: subscriptionState.isTrial,
+                trialEndsAt: subscriptionState.trialEndsAt,
+                trialDaysRemaining: subscriptionState.trialDaysRemaining,
+                accessBlocked: subscriptionState.accessBlocked,
                 organizationIsActive: orgUser.organization.isActive,
                 organizationCreatedAt: orgUser.organization.createdAt,
               }

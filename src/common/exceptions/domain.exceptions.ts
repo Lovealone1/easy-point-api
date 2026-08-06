@@ -51,3 +51,16 @@ export class TenantSuspendedError extends AppError {
     );
   }
 }
+
+export class SubscriptionExpiredError extends AppError {
+  constructor(organizationId: string, isTrial: boolean) {
+    super(
+      isTrial
+        ? 'Tu periodo de prueba de 7 días ha finalizado.'
+        : 'La suscripción de tu organización ha expirado.',
+      403,
+      isTrial ? 'TRIAL_EXPIRED' : 'SUBSCRIPTION_EXPIRED',
+      { organizationId },
+    );
+  }
+}

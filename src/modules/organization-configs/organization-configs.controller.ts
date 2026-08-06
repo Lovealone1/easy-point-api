@@ -27,6 +27,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { AllowWithoutSubscription } from '../../common/decorators/allow-without-subscription.decorator.js';
 
 @ApiTags('Organization Configs')
 @ApiBearerAuth()
@@ -37,6 +38,7 @@ export class OrganizationConfigsController {
   @Get()
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermission('organization_configs:read')
+  @AllowWithoutSubscription()
   @ApiSecurity('x-organization-id')
   @ApiOperation({ summary: 'Get organization config (Any Org Role)' })
   @ApiOkResponse({ description: 'Configuration retrieved.' })

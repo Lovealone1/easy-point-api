@@ -2,6 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '@prisma/client';
 import { OrganizationEntity } from './domain/organization.entity.js';
+import { TRIAL_PERIOD_DAYS } from './domain/base-modules.constants.js';
+
+/**
+ * A subscription grants access while ACTIVE (paid) or TRIALING (free trial)
+ * and its period hasn't lapsed. Used everywhere we read "the org's current
+ * subscription" so trial orgs resolve a plan/expiry just like paid ones.
+ */
+function currentSubscriptionWhere() {
+  return {
+    status: { in: ['ACTIVE' as const, 'TRIALING' as const] },
+    currentPeriodEnd: { gte: new Date() },
+  };
+}
 
 /**
  * Repository de Organization — capa de infraestructura.
@@ -31,9 +44,11 @@ export class OrganizationsRepository {
    */
   async create(
     data: any,
+    options?: { ownerUserId?: string },
   ): Promise<OrganizationEntity> {
     const { plan: planName, planActiveUntil, ...orgData } = data;
     const requestedPlanName = planName?.toUpperCase() ?? 'FREE';
+    const isFree = requestedPlanName === 'FREE';
 
     return this.prisma.$systemTransaction(async (tx) => {
       // 1. Find or create the plan record
@@ -48,22 +63,27 @@ export class OrganizationsRepository {
             description: `Plan ${requestedPlanName}`,
             monthlyPrice: 0,
             yearlyPrice: 0,
-            currency: 'USD',
+            currency: 'COP',
             isActive: true,
           },
         });
       }
 
+      // Every organization gets every active module — FREE is a 7-day
+      // full-access trial, not a limited tier, so there is nothing to curate.
       const activeModules = await tx.module.findMany({
         where: { isActive: true },
         select: { id: true },
       });
 
       const now = new Date();
-      // Default period: if free, e.g. 100 years, if paid, 1 month
-      const endPeriod = planActiveUntil ?? (requestedPlanName === 'FREE'
-        ? new Date(now.getFullYear() + 100, now.getMonth(), now.getDate())
-        : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
+      // FREE ⇒ 7-day trial. Paid ⇒ 1 month/year handled by caller via planActiveUntil,
+      // defaulting to +1 month here for MONTHLY billing.
+      const endPeriod =
+        planActiveUntil ??
+        (isFree
+          ? new Date(now.getTime() + TRIAL_PERIOD_DAYS * 24 * 60 * 60 * 1000)
+          : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
 
       const raw = await tx.organization.create({
         data: {
@@ -92,19 +112,17 @@ export class OrganizationsRepository {
               {
                 planId: planRecord.id,
                 billingCycle: 'MONTHLY',
-                status: 'ACTIVE',
+                status: isFree ? 'TRIALING' : 'ACTIVE',
                 currentPeriodStart: now,
                 currentPeriodEnd: endPeriod,
+                trialEndsAt: isFree ? endPeriod : null,
               }
             ]
           }
         },
         include: {
           subscriptions: {
-            where: {
-              status: 'ACTIVE',
-              currentPeriodEnd: { gte: now },
-            },
+            where: currentSubscriptionWhere(),
             include: {
               plan: true,
             },
@@ -153,7 +171,78 @@ export class OrganizationsRepository {
         });
       }
 
+      // Self-service flow: the creating user becomes OWNER of their own org.
+      if (options?.ownerUserId && ownerRole) {
+        await tx.organizationUser.create({
+          data: {
+            userId: options.ownerUserId,
+            organizationId: raw.id,
+            roleId: ownerRole.id,
+          },
+        });
+      }
+
       return OrganizationEntity.fromPrisma(raw);
+    });
+  }
+
+  /**
+   * Counts the organizations a user belongs to. Runs as a system transaction
+   * because OrganizationUser is tenant-aware — without a tenant in context
+   * (which a brand-new/org-less user never has) the Prisma RLS extension
+   * would silently scope the count to zero rows regardless of reality.
+   */
+  async countMembershipsForUser(userId: string): Promise<number> {
+    return this.prisma.$systemTransaction((tx) =>
+      tx.organizationUser.count({ where: { userId } }),
+    );
+  }
+
+  /**
+   * Returns all active modules from the global catalog. `Module` is not
+   * tenant-aware, so this is a plain read.
+   */
+  async findActiveModules(): Promise<
+    Array<{
+      id: string;
+      key: string;
+      name: string;
+      description: string | null;
+      icon: string | null;
+      sortOrder: number;
+    }>
+  > {
+    return this.prisma.module.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        description: true,
+        icon: true,
+        sortOrder: true,
+      },
+    });
+  }
+
+  /**
+   * Resolves a unique organization slug, appending `-2`, `-3`, ... when the
+   * base slug is already taken (self-service orgs commonly collide on names
+   * like "Mi Tienda"). Runs as a system transaction since it must be able to
+   * see every organization's slug, not just the caller's tenant.
+   */
+  async resolveUniqueSlug(base: string): Promise<string> {
+    return this.prisma.$systemTransaction(async (tx) => {
+      let candidate = base;
+      let suffix = 2;
+
+      while (await tx.organization.findUnique({ where: { slug: candidate } })) {
+        candidate = `${base}-${suffix}`;
+        suffix += 1;
+      }
+
+      return candidate;
     });
   }
 
@@ -172,10 +261,7 @@ export class OrganizationsRepository {
         orderBy,
         include: {
           subscriptions: {
-            where: {
-              status: 'ACTIVE',
-              currentPeriodEnd: { gte: new Date() },
-            },
+            where: currentSubscriptionWhere(),
             include: {
               plan: true,
             },
@@ -192,10 +278,7 @@ export class OrganizationsRepository {
       where: { id },
       include: {
         subscriptions: {
-          where: {
-            status: 'ACTIVE',
-            currentPeriodEnd: { gte: new Date() },
-          },
+          where: currentSubscriptionWhere(),
           include: {
             plan: true,
           },
@@ -224,22 +307,25 @@ export class OrganizationsRepository {
             description: `Plan ${requestedPlanName}`,
             monthlyPrice: 0,
             yearlyPrice: 0,
-            currency: 'USD',
+            currency: 'COP',
             isActive: true,
           },
         });
       }
 
+      const isFree = requestedPlanName === 'FREE';
       const now = new Date();
-      const endPeriod = planActiveUntil ?? (requestedPlanName === 'FREE'
-        ? new Date(now.getFullYear() + 100, now.getMonth(), now.getDate())
-        : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
+      const endPeriod =
+        planActiveUntil ??
+        (isFree
+          ? new Date(now.getTime() + TRIAL_PERIOD_DAYS * 24 * 60 * 60 * 1000)
+          : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()));
 
-      // Deactivate existing active subscriptions
+      // Deactivate existing active/trialing subscriptions
       await this.prisma.subscription.updateMany({
         where: {
           organizationId: id,
-          status: 'ACTIVE',
+          status: { in: ['ACTIVE', 'TRIALING'] },
         },
         data: {
           status: 'EXPIRED',
@@ -253,9 +339,10 @@ export class OrganizationsRepository {
           organizationId: id,
           planId: planRecord.id,
           billingCycle: 'MONTHLY',
-          status: 'ACTIVE',
+          status: isFree ? 'TRIALING' : 'ACTIVE',
           currentPeriodStart: now,
           currentPeriodEnd: endPeriod,
+          trialEndsAt: isFree ? endPeriod : null,
         },
       });
     }
@@ -265,10 +352,7 @@ export class OrganizationsRepository {
       data: orgData,
       include: {
         subscriptions: {
-          where: {
-            status: 'ACTIVE',
-            currentPeriodEnd: { gte: new Date() },
-          },
+          where: currentSubscriptionWhere(),
           include: {
             plan: true,
           },
@@ -284,10 +368,7 @@ export class OrganizationsRepository {
       where: { id },
       include: {
         subscriptions: {
-          where: {
-            status: 'ACTIVE',
-            currentPeriodEnd: { gte: new Date() },
-          },
+          where: currentSubscriptionWhere(),
           include: {
             plan: true,
           },

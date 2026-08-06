@@ -14,10 +14,8 @@ export class OrganizationConfigsRepository {
         organization: {
           include: {
             subscriptions: {
-              where: {
-                status: 'ACTIVE',
-                currentPeriodEnd: { gte: new Date() },
-              },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
               include: {
                 plan: true,
               },
@@ -55,10 +53,8 @@ export class OrganizationConfigsRepository {
         organization: {
           include: {
             subscriptions: {
-              where: {
-                status: 'ACTIVE',
-                currentPeriodEnd: { gte: new Date() },
-              },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
               include: {
                 plan: true,
               },
