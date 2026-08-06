@@ -6,6 +6,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { OrganizationUsersRepository } from './organization-users.repository.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { assertUserLimitNotExceeded } from '../organizations/domain/user-limit.helper.js';
 import { CreateOrganizationUserDto } from './dto/create-organization-user.dto.js';
 import { UpdateOrganizationUserDto } from './dto/update-organization-user.dto.js';
 import { FindOrganizationUsersDto } from './dto/find-organization-users.dto.js';
@@ -43,6 +45,7 @@ import {
 export class OrganizationUsersService {
   constructor(
     private readonly organizationUsersRepository: OrganizationUsersRepository,
+    private readonly prismaService: PrismaService,
   ) {}
 
   async create(
@@ -65,6 +68,8 @@ export class OrganizationUsersService {
         'User is already a member of this organization',
       );
     }
+
+    await assertUserLimitNotExceeded(this.prismaService, organizationId);
 
     // Verificar invariante de único OWNER via la entidad
     const assignedRole = role ?? Role.USER;

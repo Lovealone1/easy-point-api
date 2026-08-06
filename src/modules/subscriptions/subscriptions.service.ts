@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { SubscriptionsRepository } from './subscriptions.repository.js';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto.js';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto.js';
@@ -8,6 +8,7 @@ import { PageDto } from '../../common/pagination/page.dto.js';
 import { SubscriptionEntity } from './domain/subscription.entity.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma, SubscriptionStatus, BillingCycle } from '@prisma/client';
+import { resolveSubscriptionState, SubscriptionState } from '../organizations/domain/subscription-state.js';
 
 @Injectable()
 export class SubscriptionsService {
@@ -76,6 +77,25 @@ export class SubscriptionsService {
       notes: createDto.notes ?? null,
       metadata: createDto.metadata ?? null,
     });
+  }
+
+  /**
+   * The calling org's own access state — for the /subscriptions/me endpoint
+   * that backs the trial-expired page. Deliberately org-scoped (not
+   * admin-only): a user whose trial expired still needs this to render.
+   */
+  async getMyOrganizationState(organizationId: string): Promise<SubscriptionState> {
+    if (!organizationId) {
+      throw new ForbiddenException('Contexto de organización no encontrado');
+    }
+
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+      include: { plan: true },
+    });
+
+    return resolveSubscriptionState(subscription);
   }
 
   async findAll(query: FindSubscriptionsDto): Promise<PageDto<SubscriptionEntity>> {
