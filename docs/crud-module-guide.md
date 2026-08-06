@@ -28,7 +28,8 @@ siguiendo Clean Architecture con NestJS + Prisma. La regla central es:
 ```
 src/modules/{nombre}/
 ├── domain/
-│   └── {nombre}.entity.ts          ← NUEVO: entidad de dominio
+│   ├── {nombre}.entity.ts          ← NUEVO: entidad de dominio
+│   └── {nombre}.entity.spec.ts     ← si la entidad tiene lógica (métodos, cálculos)
 ├── dto/
 │   ├── create-{nombre}.dto.ts
 │   ├── update-{nombre}.dto.ts
@@ -37,9 +38,14 @@ src/modules/{nombre}/
 │   └── add-{nombre}-note.dto.ts        (si aplica)
 ├── {nombre}s.repository.ts
 ├── {nombre}s.service.ts
+├── {nombre}s.service.spec.ts       ← OBLIGATORIO, ver Paso 7
 ├── {nombre}s.controller.ts
 └── {nombre}s.module.ts
 ```
+
+> [!IMPORTANT]
+> **Todo módulo nuevo se entrega junto con su `.spec.ts`.** Un PR que añade un
+> módulo sin pruebas no está completo — ver más abajo "Paso 7 — Tests (obligatorio)".
 
 ---
 
@@ -610,7 +616,95 @@ export class XxxsModule {}
 
 ---
 
-## Paso 7 — Registrar en `app.module.ts`
+## Paso 7 — Tests (obligatorio)
+
+> [!IMPORTANT]
+> **Ningún módulo se considera terminado sin su archivo `.spec.ts`.** No es opcional
+> ni "para después" — se escribe en la misma tanda de trabajo que el módulo, antes
+> de darlo por completo. El checklist final (Paso 9) no se puede tildar sin esto.
+
+**Qué se prueba y qué no:**
+
+| Archivo | ¿Se testea? | Cómo |
+|---|---|---|
+| `{nombre}s.service.ts` | ✅ Siempre | `Test.createTestingModule` de NestJS + repository/servicios dependientes mockeados con `jest.fn()` |
+| `domain/{nombre}.entity.ts` | ✅ Si tiene lógica (cálculos, invariantes, getters derivados) | Test plano de Jest, sin `TestingModule` — la entidad no depende de Nest |
+| Helpers puros en `domain/*.helper.ts` | ✅ Siempre | Test plano de Jest, cubriendo casos límite (fechas, redondeos, ciclos) |
+| `{nombre}s.repository.ts` | ❌ No unitario | Es un wrapper delgado de Prisma; se confía en el tipado y en las pruebas de service/e2e |
+| `{nombre}s.controller.ts`, `{nombre}s.module.ts`, `dto/*.ts` | ❌ No unitario | Sin lógica propia — decoradores y delegación directa al service |
+
+Esta división ya es el patrón real del repo (ver `expenses.service.spec.ts`,
+`discount-rules/domain/discount-rule.entity.spec.ts`): el coverage global de un
+módulo ronda 30-50% (arrastrado por controller/dto/repository sin testear), pero
+el **service** — donde vive toda la orquestación y las validaciones — debe rondar
+70-90%+ de sentencias cubiertas. Ese es el criterio de "cobertura aceptable": no
+un número global arbitrario, sino que los flujos de negocio del service estén
+cubiertos.
+
+**Patrón del service spec** (mockeando el repository, no Prisma directamente):
+
+```typescript
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { XxxsService } from './xxxs.service.js';
+import { XxxsRepository } from './xxxs.repository.js';
+import { XxxEntity } from './domain/xxx.entity.js';
+
+describe('XxxsService', () => {
+  let service: XxxsService;
+  let repository: jest.Mocked<XxxsRepository>;
+
+  const mockEntity = XxxEntity.fromPrisma({ id: 'xxx-1', name: 'Test', /* ...resto de campos */ });
+
+  beforeEach(async () => {
+    const mockRepository = {
+      create: jest.fn(),
+      findManyWithCount: jest.fn(),
+      findById: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [XxxsService, { provide: XxxsRepository, useValue: mockRepository }],
+    }).compile();
+
+    service = module.get<XxxsService>(XxxsService);
+    repository = module.get(XxxsRepository) as any;
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('findOne', () => {
+    it('throws NotFoundException when the record does not exist', async () => {
+      repository.findById.mockResolvedValueOnce(null);
+      await expect(service.findOne('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // Cubrir: cada validación que lanza una excepción (una prueba por rama),
+  // el camino feliz de create/update, y cualquier cálculo delegado a la entidad.
+});
+```
+
+> [!TIP]
+> Si el service depende de otros servicios (ej. valida una FK contra otro módulo,
+> como `SubscriptionCatalogService` en `user-subscriptions`), mockéalos también
+> como providers — nunca instancies el servicio real ni su repository real en un
+> test unitario.
+
+Comandos: `pnpm test` corre toda la suite; `pnpm test:cov` genera cobertura completa
+en `coverage/`. Para validar un módulo puntual mientras se desarrolla:
+
+```bash
+npx jest src/modules/{nombre}/{nombre}s.service.spec.ts
+```
+
+---
+
+## Paso 8 — Registrar en `app.module.ts`
 
 ```typescript
 // 1. Añadir el import en la parte superior:
@@ -639,9 +733,12 @@ export class AppModule {}
 - `[ ]` DTOs extra para operaciones puntuales (toggle, notes, etc.)
 - `[ ]` `xxxs.repository.ts` — solo Prisma, retorna `XxxEntity`, cero lógica
 - `[ ]` `xxxs.service.ts` — solo orquestación, lógica en la entidad
+- `[ ]` **`xxxs.service.spec.ts`** — OBLIGATORIO, cubre validaciones + camino feliz de cada método (ver Paso 7)
+- `[ ]` `domain/xxx.entity.spec.ts` — si la entidad tiene lógica propia (cálculos, invariantes)
 - `[ ]` `xxxs.controller.ts` con guards correctos por endpoint
 - `[ ]` `xxxs.module.ts` con todos los providers registrados
 - `[ ]` Módulo importado en `app.module.ts`
+- `[ ]` `npx jest src/modules/xxxs` pasa en verde
 
 ---
 
@@ -659,6 +756,8 @@ export class AppModule {}
 | `organizationId` en el body del create | Anti-patrón: expone campo interno al cliente | Usar `getTenantId()` en el service; **nunca** en el DTO |
 | Datos de otra org visibles en el listado | `findAll` sin filtro tenant | Aplicar `if (tenantId) where.organizationId = tenantId` con `getTenantId()` |
 | Repository retorna tipo Prisma (`Supply`) | Fuga de infraestructura a capas superiores | Todos los métodos del repository deben retornar `XxxEntity` |
+| Módulo entregado sin `.spec.ts` | Se trató el test como opcional/"para después" | Escribirlo en la misma tanda; ver Paso 7 — es parte del checklist, no un extra |
+| Test mockea Prisma directamente en vez del repository | Acopla el test a la capa de infraestructura | El service spec mockea `XxxsRepository`, nunca `PrismaService`, salvo que el service la use directo |
 
 ---
 
@@ -674,4 +773,20 @@ src/modules/supplies/
 ├── supplies.repository.ts   ← patrón con update recibiendo entidad
 ├── supplies.service.ts      ← orquestación pura
 └── supplies.controller.ts
+```
+
+Para el patrón de tests (Paso 7), el módulo `user-subscriptions` es la referencia
+más completa: combina mocks de repository, mocks de otros servicios inyectados
+(`SubscriptionCatalogService`, `UserPaymentCardsService`) y specs planos para sus
+helpers de dominio puros:
+
+```
+src/modules/user-subscriptions/
+├── domain/
+│   ├── billing-cycle.helper.ts
+│   ├── billing-cycle.helper.spec.ts   ← helper puro, sin TestingModule
+│   ├── usage-stats.helper.ts
+│   └── usage-stats.helper.spec.ts
+├── user-subscriptions.service.ts
+└── user-subscriptions.service.spec.ts  ← service con 2 dependencias mockeadas
 ```

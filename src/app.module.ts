@@ -56,6 +56,9 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { InvoicesModule } from './modules/invoices/invoices.module.js';
 import { UserInfoModule } from './modules/user-info/user-info.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { SubscriptionCatalogModule } from './modules/subscription-catalog/subscription-catalog.module.js';
+import { UserPaymentCardsModule } from './modules/user-payment-cards/user-payment-cards.module.js';
+import { UserSubscriptionsModule } from './modules/user-subscriptions/user-subscriptions.module.js';
 
 @Module({
   imports: [
@@ -122,6 +125,9 @@ import { HealthModule } from './modules/health/health.module.js';
     SubscriptionsModule,
     InvoicesModule,
     UserInfoModule,
+    SubscriptionCatalogModule,
+    UserPaymentCardsModule,
+    UserSubscriptionsModule,
   ],
   controllers: [],
   providers: [
