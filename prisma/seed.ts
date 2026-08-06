@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PERMISSIONS_CATALOG } from './seed/permissions.catalog.js';
 import { seedPlans } from './seed/plans.seed.js';
+import { seedSubscriptionCatalog } from './seed/subscription-catalog.seed.js';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL env variable is missing');
@@ -11,6 +12,7 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const plansUpserted = await seedPlans(prisma);
+  const { categoriesUpserted, providersUpserted } = await seedSubscriptionCatalog(prisma);
 
   console.log('🌱 Seeding permissions catalog...\n');
 
@@ -170,7 +172,9 @@ async function main() {
   console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Seed completed:
-   Plans:       ${plansUpserted}
+   Plans:                ${plansUpserted}
+   Sub. Categories:      ${categoriesUpserted}
+   Sub. Providers:       ${providersUpserted}
    Modules:     ${modulesUpserted}
    Features:    ${featuresUpserted}
    Permissions: ${permissionsUpserted}
