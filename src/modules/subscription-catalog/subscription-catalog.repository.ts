@@ -23,8 +23,13 @@ export class SubscriptionCatalogRepository {
     return raw ? SubscriptionCategoryEntity.fromPrisma(raw) : null;
   }
 
+  /**
+   * System categories only. `key` is no longer globally unique — users author
+   * their own — so this is a findFirst scoped to `userId: null` rather than a
+   * findUnique.
+   */
   async findCategoryByKey(key: string): Promise<SubscriptionCategoryEntity | null> {
-    const raw = await this.prisma.subscriptionCategory.findUnique({ where: { key } });
+    const raw = await this.prisma.subscriptionCategory.findFirst({ where: { key, userId: null } });
     return raw ? SubscriptionCategoryEntity.fromPrisma(raw) : null;
   }
 
