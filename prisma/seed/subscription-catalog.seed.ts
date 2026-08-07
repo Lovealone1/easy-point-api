@@ -95,11 +95,28 @@ export async function seedSubscriptionCatalog(prisma: PrismaClient) {
   let categoriesUpserted = 0;
 
   for (const def of SUBSCRIPTION_CATEGORIES) {
-    const category = await prisma.subscriptionCategory.upsert({
-      where: { key: def.key },
-      update: { name: def.name, icon: def.icon, color: def.color, sortOrder: def.sortOrder, isActive: true },
-      create: { key: def.key, name: def.name, icon: def.icon, color: def.color, sortOrder: def.sortOrder, isActive: true },
+    const payload = {
+      name: def.name,
+      icon: def.icon,
+      color: def.color,
+      sortOrder: def.sortOrder,
+      isActive: true,
+    };
+
+    // Not an upsert: `key` alone is no longer unique (users author their own
+    // categories), and the compound unique cannot be matched on a NULL userId —
+    // Postgres compares it with `= NULL`, which never hits. A partial unique
+    // index guards the system rows instead; see the migration.
+    const existing = await prisma.subscriptionCategory.findFirst({
+      where: { key: def.key, userId: null },
     });
+
+    const category = existing
+      ? await prisma.subscriptionCategory.update({ where: { id: existing.id }, data: payload })
+      : await prisma.subscriptionCategory.create({
+          data: { key: def.key, userId: null, ...payload },
+        });
+
     categoryIdByKey.set(def.key, category.id);
     categoriesUpserted++;
     console.log(`  ✅ Category: ${category.name}`);
