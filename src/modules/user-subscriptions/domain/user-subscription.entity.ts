@@ -1,4 +1,5 @@
-import { BillingCycle, Prisma, UserSubscriptionStatus } from '@prisma/client';
+import { Prisma, RecurrenceUnit, UserSubscriptionStatus } from '@prisma/client';
+import type { Recurrence } from './recurrence.helper.js';
 import { SubscriptionProviderEntity } from '../../subscription-catalog/domain/subscription-provider.entity.js';
 import { SubscriptionCategoryEntity } from '../../subscription-catalog/domain/subscription-category.entity.js';
 import { UserPaymentCardEntity } from '../../user-payment-cards/domain/user-payment-card.entity.js';
@@ -14,7 +15,11 @@ export class UserSubscriptionEntity {
   planLabel: string | null;
   amount: Prisma.Decimal;
   currency: string;
-  billingCycle: BillingCycle;
+  recurrenceUnit: RecurrenceUnit;
+  recurrenceInterval: number;
+  isRecurring: boolean;
+  customWebsiteUrl: string | null;
+  billingCutoffDay: number | null;
   startedAt: Date;
   nextBillingDate: Date | null;
   status: UserSubscriptionStatus;
@@ -41,7 +46,11 @@ export class UserSubscriptionEntity {
     planLabel: string | null;
     amount: Prisma.Decimal;
     currency: string;
-    billingCycle: BillingCycle;
+    recurrenceUnit: RecurrenceUnit;
+    recurrenceInterval: number;
+    isRecurring: boolean;
+    customWebsiteUrl: string | null;
+    billingCutoffDay: number | null;
     startedAt: Date;
     nextBillingDate: Date | null;
     status: UserSubscriptionStatus;
@@ -72,6 +81,28 @@ export class UserSubscriptionEntity {
     return this.provider?.category ?? this.customCategory ?? null;
   }
 
+  get displayWebsiteUrl(): string | null {
+    return this.provider?.websiteUrl ?? this.customWebsiteUrl ?? null;
+  }
+
+  /**
+   * The statement day that actually applies. Left unresolved in the database so
+   * that editing the card propagates to every subscription that didn't override
+   * it.
+   */
+  get effectiveCutoffDay(): number | null {
+    return this.billingCutoffDay ?? this.card?.statementDay ?? null;
+  }
+
+  /** Shape the recurrence helpers consume. */
+  get recurrence(): Recurrence {
+    return {
+      unit: this.recurrenceUnit,
+      interval: this.recurrenceInterval,
+      isRecurring: this.isRecurring,
+    };
+  }
+
   static fromPrisma(raw: {
     id: string;
     userId: string;
@@ -83,7 +114,11 @@ export class UserSubscriptionEntity {
     planLabel: string | null;
     amount: Prisma.Decimal;
     currency: string;
-    billingCycle: BillingCycle;
+    recurrenceUnit: RecurrenceUnit;
+    recurrenceInterval: number;
+    isRecurring: boolean;
+    customWebsiteUrl: string | null;
+    billingCutoffDay: number | null;
     startedAt: Date;
     nextBillingDate: Date | null;
     status: UserSubscriptionStatus;

@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BillingCycle, UserSubscriptionStatus } from '@prisma/client';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { RecurrenceUnit, UserSubscriptionStatus } from '@prisma/client';
+import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { PageOptionsDto } from '../../../common/pagination/page-options.dto.js';
 
 export class FindUserSubscriptionsDto extends PageOptionsDto {
@@ -19,8 +20,14 @@ export class FindUserSubscriptionsDto extends PageOptionsDto {
   @IsString()
   categoryId?: string;
 
-  @ApiPropertyOptional({ enum: BillingCycle })
+  @ApiPropertyOptional({ enum: RecurrenceUnit, description: 'Filtrar por unidad de recurrencia' })
   @IsOptional()
-  @IsEnum(BillingCycle)
-  billingCycle?: BillingCycle;
+  @IsEnum(RecurrenceUnit)
+  recurrenceUnit?: RecurrenceUnit;
+
+  @ApiPropertyOptional({ description: 'Filtrar recurrentes (true) o cobros únicos (false)' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  isRecurring?: boolean;
 }
