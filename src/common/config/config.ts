@@ -91,6 +91,21 @@ interface AppConfigShape {
   audit: {
     retentionDays: number;
   };
+  /**
+   * Foreign-exchange rates for the personal subscription tracker. Every value
+   * has a working default, so none of these are required at boot: a missing or
+   * broken FX configuration degrades conversion, it never blocks startup.
+   */
+  fx: {
+    provider: string;
+    baseUrl: string;
+    apiKey: string;
+    /** Single pivot base fetched for the whole platform; cross-rates derive from it. */
+    baseCurrency: string;
+    cacheTtlSeconds: number;
+    requestTimeoutMs: number;
+    enabled: boolean;
+  };
 }
 
 function getString(key: string, fallback = ''): string {
@@ -402,6 +417,15 @@ export default registerAs('app', (): AppConfig => {
     },
     audit: {
       retentionDays: getNumber('AUDIT_LOG_RETENTION_DAYS', 30),
+    },
+    fx: {
+      provider: getString('FX_PROVIDER', 'open-er-api'),
+      baseUrl: getString('FX_BASE_URL', 'https://open.er-api.com/v6/latest'),
+      apiKey: getString('FX_API_KEY'),
+      baseCurrency: getString('FX_BASE_CURRENCY', 'USD'),
+      cacheTtlSeconds: getNumber('FX_CACHE_TTL_SECONDS', 86_400),
+      requestTimeoutMs: getNumber('FX_REQUEST_TIMEOUT_MS', 5_000),
+      enabled: getBoolean('FX_ENABLED', true),
     },
   };
 });

@@ -13,6 +13,7 @@ describe('SubscriptionCatalogService', () => {
 
   const mockCategory = new SubscriptionCategoryEntity({
     id: 'cat-1',
+    userId: null,
     key: 'entertainment',
     name: 'Entretenimiento',
     icon: 'movie-rounded',
@@ -106,7 +107,7 @@ describe('SubscriptionCatalogService', () => {
       const result = await service.findAllCategories(true);
 
       expect(result).toEqual([mockCategory]);
-      expect(repository.findAllCategories).toHaveBeenCalledWith({ isActive: true });
+      expect(repository.findAllCategories).toHaveBeenCalledWith({ userId: null, isActive: true });
     });
 
     it('does not filter by isActive when it is omitted', async () => {
@@ -114,7 +115,16 @@ describe('SubscriptionCatalogService', () => {
 
       await service.findAllCategories();
 
-      expect(repository.findAllCategories).toHaveBeenCalledWith({});
+      expect(repository.findAllCategories).toHaveBeenCalledWith({ userId: null });
+    });
+
+    it('never exposes user-authored categories through the public catalog', async () => {
+      repository.findAllCategories.mockResolvedValueOnce([]);
+
+      await service.findAllCategories();
+
+      const [where] = repository.findAllCategories.mock.calls[0];
+      expect(where.userId).toBeNull();
     });
   });
 
