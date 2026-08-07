@@ -59,17 +59,7 @@ export class SubscriptionProviderEntity {
     metadata: Prisma.JsonValue | null;
     createdAt: Date;
     updatedAt: Date;
-    category?: {
-      id: string;
-      key: string;
-      name: string;
-      icon: string | null;
-      color: string | null;
-      sortOrder: number;
-      isActive: boolean;
-      createdAt: Date;
-      updatedAt: Date;
-    } | null;
+    category?: Parameters<typeof SubscriptionCategoryEntity.fromPrisma>[0] | null;
   }): SubscriptionProviderEntity {
     return new SubscriptionProviderEntity({
       ...raw,

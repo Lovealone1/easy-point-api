@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PERMISSIONS_CATALOG } from './seed/permissions.catalog.js';
 import { seedPlans } from './seed/plans.seed.js';
+import { seedCurrencies } from './seed/currencies.seed.js';
 import { seedSubscriptionCatalog } from './seed/subscription-catalog.seed.js';
 
 const connectionString = process.env.DATABASE_URL;
@@ -12,6 +13,9 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const plansUpserted = await seedPlans(prisma);
+  // Currencies before the subscription catalog: they are a leaf dependency
+  // that subscription currency validation relies on.
+  const { currenciesUpserted } = await seedCurrencies(prisma);
   const { categoriesUpserted, providersUpserted } = await seedSubscriptionCatalog(prisma);
 
   console.log('🌱 Seeding permissions catalog...\n');
@@ -173,6 +177,7 @@ async function main() {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Seed completed:
    Plans:                ${plansUpserted}
+   Currencies:           ${currenciesUpserted}
    Sub. Categories:      ${categoriesUpserted}
    Sub. Providers:       ${providersUpserted}
    Modules:     ${modulesUpserted}

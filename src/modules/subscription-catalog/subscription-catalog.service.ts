@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SubscriptionCatalogRepository } from './subscription-catalog.repository.js';
 import { CreateSubscriptionCategoryDto } from './dto/create-subscription-category.dto.js';
 import { UpdateSubscriptionCategoryDto } from './dto/update-subscription-category.dto.js';
@@ -14,6 +14,8 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class SubscriptionCatalogService {
+  private readonly logger = new Logger(SubscriptionCatalogService.name);
+
   constructor(
     private readonly catalogRepository: SubscriptionCatalogRepository,
     private readonly storageService: StorageService,
@@ -21,8 +23,12 @@ export class SubscriptionCatalogService {
 
   // Categories
 
+  /**
+   * The public catalog is system categories only. User-authored ones are
+   * private to their owner and are served by `me/subscription-categories`.
+   */
   async findAllCategories(isActive?: boolean): Promise<SubscriptionCategoryEntity[]> {
-    const where: Prisma.SubscriptionCategoryWhereInput = {};
+    const where: Prisma.SubscriptionCategoryWhereInput = { userId: null };
     if (isActive !== undefined) where.isActive = isActive;
     return this.catalogRepository.findAllCategories(where);
   }
@@ -109,7 +115,7 @@ export class SubscriptionCatalogService {
     });
 
     const pageMetaDto = new PageMetaDto({ itemCount: count, pageOptionsDto: query });
-    return new PageDto(items, pageMetaDto);
+    return new PageDto(await this.resolveLogos(items), pageMetaDto);
   }
 
   async findOneProvider(id: string): Promise<SubscriptionProviderEntity> {
@@ -117,7 +123,29 @@ export class SubscriptionCatalogService {
     if (!record) {
       throw new NotFoundException(`Provider with ID ${id} not found`);
     }
-    return record;
+    return this.resolveLogo(record);
+  }
+
+  /**
+   * An uploaded logo is stored as a bare S3 key, which the browser cannot
+   * render. Sign it on the way out. Seeded logos are absolute CDN URLs and pass
+   * through untouched.
+   */
+  private async resolveLogo(provider: SubscriptionProviderEntity): Promise<SubscriptionProviderEntity> {
+    if (!provider.logoUrl || provider.logoUrl.startsWith('http')) return provider;
+
+    try {
+      provider.logoUrl = await this.storageService.getPresignedUrl(provider.logoUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not sign the logo for provider ${provider.id}: ${message}`);
+    }
+
+    return provider;
+  }
+
+  private resolveLogos(providers: SubscriptionProviderEntity[]): Promise<SubscriptionProviderEntity[]> {
+    return Promise.all(providers.map((p) => this.resolveLogo(p)));
   }
 
   async createProvider(dto: CreateSubscriptionProviderDto): Promise<SubscriptionProviderEntity> {

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma, UserSubscriptionStatus } from '@prisma/client';
 import { UserPaymentCardEntity } from './domain/user-payment-card.entity.js';
-import { toMonthlyAmount } from '../user-subscriptions/domain/billing-cycle.helper.js';
+import { toMonthlyAmount } from '../user-subscriptions/domain/recurrence.helper.js';
 
 @Injectable()
 export class UserPaymentCardsRepository {
@@ -15,7 +15,14 @@ export class UserPaymentCardsRepository {
       include: {
         subscriptions: {
           where: { status: UserSubscriptionStatus.ACTIVE },
-          select: { id: true, amount: true, currency: true, billingCycle: true },
+          select: {
+            id: true,
+            amount: true,
+            currency: true,
+            recurrenceUnit: true,
+            recurrenceInterval: true,
+            isRecurring: true,
+          },
         },
       },
     });
@@ -27,7 +34,14 @@ export class UserPaymentCardsRepository {
       // the same currency in practice). Multi-currency breakdown belongs to
       // the /me/subscriptions/summary endpoint, which groups by currency.
       const monthlyTotal = subscriptions.reduce(
-        (acc, sub) => acc.add(toMonthlyAmount(sub.amount, sub.billingCycle)),
+        (acc, sub) =>
+          acc.add(
+            toMonthlyAmount(sub.amount, {
+              unit: sub.recurrenceUnit,
+              interval: sub.recurrenceInterval,
+              isRecurring: sub.isRecurring,
+            }),
+          ),
         new Prisma.Decimal(0),
       );
 

@@ -15,7 +15,7 @@ export interface UsageStats {
   usageRate14d: number | null;
   checkInCount14d: number;
   usedCount30d: number;
-  /** null when there were zero uses in the last 30 days — shown as "sin uso registrado", not a misleading number. */
+  /** null when there were zero uses in the last 30 days, or when the subscription is a one-time charge with no run rate — shown as "sin uso registrado", not a misleading number. */
   costPerUse30d: Prisma.Decimal | null;
   lastUsedAt: Date | null;
   isZombieCandidate: boolean;
@@ -47,7 +47,11 @@ export function computeUsageStats(
   const usedLogs30d = logs.filter((l) => l.date >= cutoff30d && l.date <= now && l.used);
   const usedCount30d = usedLogs30d.length;
 
-  const costPerUse30d = usedCount30d > 0 ? monthlyEquivalentAmount.div(usedCount30d) : null;
+  // A one-time charge has no monthly run rate, so there is no honest
+  // cost-per-use to report — "$0 per use" would read as free.
+  const hasRunRate = !monthlyEquivalentAmount.isZero();
+  const costPerUse30d =
+    usedCount30d > 0 && hasRunRate ? monthlyEquivalentAmount.div(usedCount30d) : null;
 
   const usedLogsAll = logs.filter((l) => l.used);
   const lastUsedAt = usedLogsAll.length > 0

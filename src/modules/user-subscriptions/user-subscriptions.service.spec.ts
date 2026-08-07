@@ -1,10 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { BillingCycle, CardBrand, Prisma, UserSubscriptionStatus } from '@prisma/client';
+import { CardBrand, Prisma, RecurrenceUnit, UserSubscriptionStatus } from '@prisma/client';
 import { UserSubscriptionsService } from './user-subscriptions.service.js';
 import { UserSubscriptionsRepository } from './user-subscriptions.repository.js';
 import { SubscriptionCatalogService } from '../subscription-catalog/subscription-catalog.service.js';
 import { UserPaymentCardsService } from '../user-payment-cards/user-payment-cards.service.js';
+import { CurrenciesService } from '../currencies/currencies.service.js';
+import { UserSubscriptionCategoriesService } from '../user-subscription-categories/user-subscription-categories.service.js';
+import { UserPreferencesService } from '../user-preferences/user-preferences.service.js';
+import { FxRateService } from '../exchange-rates/fx-rate.service.js';
+import { StorageService } from '../../infraestructure/storage/storage.service.js';
 import { UserSubscriptionEntity } from './domain/user-subscription.entity.js';
 import { SubscriptionProviderEntity } from '../subscription-catalog/domain/subscription-provider.entity.js';
 import { SubscriptionCategoryEntity } from '../subscription-catalog/domain/subscription-category.entity.js';
@@ -14,12 +19,26 @@ describe('UserSubscriptionsService', () => {
   let service: UserSubscriptionsService;
   let repository: jest.Mocked<UserSubscriptionsRepository>;
   let catalogService: jest.Mocked<SubscriptionCatalogService>;
-  let cardsService: jest.Mocked<UserPaymentCardsService>;
+  let cardsService: jest.Mocked<UserPaymentCardsService>
+  let categoriesService: jest.Mocked<UserSubscriptionCategoriesService>;
+  let fxRateService: jest.Mocked<FxRateService>;
+  let storageService: jest.Mocked<StorageService>;
 
   const userId = 'user-1';
 
+  /** COP is the user's preferred currency in these tests, so 1:1 conversion. */
+  const copPivotTable = {
+    base: 'COP',
+    rates: { COP: 1, USD: 0.00025, EUR: 0.00023 },
+    ratesAsOf: new Date('2026-08-06T00:00:00.000Z'),
+    nextUpdateAt: new Date('2026-08-07T00:00:00.000Z'),
+    provider: 'open-er-api',
+    attribution: 'Rates By Exchange Rate API',
+  };
+
   const mockCategory = new SubscriptionCategoryEntity({
     id: 'cat-1',
+    userId: null,
     key: 'entertainment',
     name: 'Entretenimiento',
     icon: null,
@@ -74,7 +93,11 @@ describe('UserSubscriptionsService', () => {
       planLabel: null,
       amount: new Prisma.Decimal(34900),
       currency: 'COP',
-      billingCycle: BillingCycle.MONTHLY,
+      recurrenceUnit: RecurrenceUnit.MONTH,
+      recurrenceInterval: 1,
+      isRecurring: true,
+      customWebsiteUrl: null,
+      billingCutoffDay: null,
       startedAt: new Date('2026-01-10T00:00:00.000Z'),
       nextBillingDate: new Date('2026-08-10T00:00:00.000Z'),
       status: UserSubscriptionStatus.ACTIVE,
@@ -118,12 +141,45 @@ describe('UserSubscriptionsService', () => {
       findAllForUser: jest.fn(),
     };
 
+    const mockCategoriesService = {
+      assertUsableBy: jest.fn().mockResolvedValue(mockCategory),
+    };
+
+    const mockCurrenciesService = {
+      // Echo the code back so any valid-looking currency passes; the rejection
+      // path is exercised explicitly where it matters.
+      assertExists: jest.fn().mockImplementation((code: string) => Promise.resolve({ code, decimalDigits: 2 })),
+      getDecimalDigits: jest.fn().mockResolvedValue(2),
+    };
+
+    const mockPreferencesService = {
+      getPreferredCurrency: jest.fn().mockResolvedValue('COP'),
+    };
+
+    const mockFxRateService = {
+      getPivotTable: jest.fn().mockResolvedValue({ table: copPivotTable, stale: false, unavailable: false }),
+      getRates: jest.fn(),
+      convert: jest.fn(),
+      attribution: 'Rates By Exchange Rate API',
+    };
+
+    const mockStorageService = {
+      uploadFile: jest.fn(),
+      deleteFile: jest.fn().mockResolvedValue(undefined),
+      getPresignedUrl: jest.fn().mockImplementation((key: string) => Promise.resolve(`https://signed.example.com/${key}`)),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserSubscriptionsService,
         { provide: UserSubscriptionsRepository, useValue: mockRepository },
         { provide: SubscriptionCatalogService, useValue: mockCatalogService },
         { provide: UserPaymentCardsService, useValue: mockCardsService },
+        { provide: UserSubscriptionCategoriesService, useValue: mockCategoriesService },
+        { provide: CurrenciesService, useValue: mockCurrenciesService },
+        { provide: UserPreferencesService, useValue: mockPreferencesService },
+        { provide: FxRateService, useValue: mockFxRateService },
+        { provide: StorageService, useValue: mockStorageService },
       ],
     }).compile();
 
@@ -131,6 +187,9 @@ describe('UserSubscriptionsService', () => {
     repository = module.get(UserSubscriptionsRepository) as any;
     catalogService = module.get(SubscriptionCatalogService) as any;
     cardsService = module.get(UserPaymentCardsService) as any;
+    categoriesService = module.get(UserSubscriptionCategoriesService) as any;
+    fxRateService = module.get(FxRateService) as any;
+    storageService = module.get(StorageService) as any;
   });
 
   it('should be defined', () => {
@@ -142,7 +201,7 @@ describe('UserSubscriptionsService', () => {
       await expect(
         service.create(userId, {
           amount: 100,
-          billingCycle: BillingCycle.MONTHLY,
+          recurrenceUnit: RecurrenceUnit.MONTH,
           startedAt: '2026-01-01',
         } as any),
       ).rejects.toThrow(BadRequestException);
@@ -159,7 +218,7 @@ describe('UserSubscriptionsService', () => {
         providerId: 'prov-1',
         cardId: 'card-1',
         amount: 34900,
-        billingCycle: BillingCycle.MONTHLY,
+        recurrenceUnit: RecurrenceUnit.MONTH,
         startedAt: '2026-01-10',
       });
 
@@ -172,14 +231,14 @@ describe('UserSubscriptionsService', () => {
       );
     });
 
-    it('derives nextBillingDate from startedAt + billingCycle when not provided', async () => {
+    it('derives nextBillingDate from startedAt + the recurrence when not provided', async () => {
       catalogService.findOneProvider.mockResolvedValueOnce(mockProvider);
       repository.create.mockResolvedValueOnce(buildSubscription());
 
       await service.create(userId, {
         providerId: 'prov-1',
         amount: 100,
-        billingCycle: BillingCycle.MONTHLY,
+        recurrenceUnit: RecurrenceUnit.MONTH,
         startedAt: '2026-01-10',
       });
 
@@ -187,20 +246,119 @@ describe('UserSubscriptionsService', () => {
       expect(createArgs.nextBillingDate).toEqual(new Date('2026-02-10T00:00:00.000Z'));
     });
 
-    it('validates the custom category when no providerId is given', async () => {
-      catalogService.findOneCategory.mockResolvedValueOnce(mockCategory);
+    it('honours an interval greater than one when deriving nextBillingDate', async () => {
+      catalogService.findOneProvider.mockResolvedValueOnce(mockProvider);
+      repository.create.mockResolvedValueOnce(buildSubscription());
+
+      await service.create(userId, {
+        providerId: 'prov-1',
+        amount: 100,
+        recurrenceUnit: RecurrenceUnit.MONTH,
+        recurrenceInterval: 3,
+        startedAt: '2026-01-10',
+      });
+
+      const [createArgs] = repository.create.mock.calls[0];
+      expect(createArgs.nextBillingDate).toEqual(new Date('2026-04-10T00:00:00.000Z'));
+      expect(createArgs.recurrenceInterval).toBe(3);
+    });
+
+    it('bills a one-time charge on its start date and normalizes its recurrence', async () => {
+      catalogService.findOneProvider.mockResolvedValueOnce(mockProvider);
+      repository.create.mockResolvedValueOnce(buildSubscription({ isRecurring: false }));
+
+      await service.create(userId, {
+        providerId: 'prov-1',
+        amount: 100,
+        recurrenceUnit: RecurrenceUnit.YEAR,
+        recurrenceInterval: 5,
+        isRecurring: false,
+        startedAt: '2026-01-10',
+      });
+
+      const [createArgs] = repository.create.mock.calls[0];
+      expect(createArgs.nextBillingDate).toEqual(new Date('2026-01-10T00:00:00.000Z'));
+      expect(createArgs.isRecurring).toBe(false);
+      expect(createArgs.recurrenceUnit).toBe(RecurrenceUnit.MONTH);
+      expect(createArgs.recurrenceInterval).toBe(1);
+    });
+
+    it('rejects an unknown currency', async () => {
+      catalogService.findOneProvider.mockResolvedValueOnce(mockProvider);
+      const currenciesService = (service as any).currenciesService;
+      currenciesService.assertExists.mockRejectedValueOnce(new BadRequestException('moneda inválida'));
+
+      await expect(
+        service.create(userId, {
+          providerId: 'prov-1',
+          amount: 100,
+          currency: 'XXX',
+          recurrenceUnit: RecurrenceUnit.MONTH,
+          startedAt: '2026-01-10',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects custom fields sent alongside a catalog providerId', async () => {
+      await expect(
+        service.create(userId, {
+          providerId: 'prov-1',
+          customCategoryId: 'cat-9',
+          amount: 100,
+          recurrenceUnit: RecurrenceUnit.MONTH,
+          startedAt: '2026-01-10',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('leaves billingCutoffDay null so the card statement day keeps propagating', async () => {
+      catalogService.findOneProvider.mockResolvedValueOnce(mockProvider);
+      cardsService.findOneForUser.mockResolvedValueOnce(mockCard);
+      repository.create.mockResolvedValueOnce(buildSubscription());
+
+      await service.create(userId, {
+        providerId: 'prov-1',
+        cardId: 'card-1',
+        amount: 100,
+        recurrenceUnit: RecurrenceUnit.MONTH,
+        startedAt: '2026-01-10',
+      });
+
+      const [createArgs] = repository.create.mock.calls[0];
+      expect(createArgs.billingCutoffDay).toBeNull();
+    });
+
+    it('validates the custom category against what the user is allowed to use', async () => {
       repository.create.mockResolvedValueOnce(buildSubscription({ providerId: null, customName: 'Gym', customCategoryId: 'cat-1', provider: null, customCategory: mockCategory }));
 
       await service.create(userId, {
         customName: 'Gym',
         customCategoryId: 'cat-1',
         amount: 50000,
-        billingCycle: BillingCycle.YEARLY,
+        recurrenceUnit: RecurrenceUnit.YEAR,
         startedAt: '2026-01-01',
       });
 
-      expect(catalogService.findOneCategory).toHaveBeenCalledWith('cat-1');
+      // Scoped by user, so another user's category id cannot be borrowed.
+      expect(categoriesService.assertUsableBy).toHaveBeenCalledWith('cat-1', userId);
       expect(catalogService.findOneProvider).not.toHaveBeenCalled();
+    });
+
+    it('rejects a category the user is not allowed to use', async () => {
+      categoriesService.assertUsableBy.mockRejectedValueOnce(new NotFoundException('Category not found'));
+
+      await expect(
+        service.create(userId, {
+          customName: 'Gym',
+          customCategoryId: 'someone-elses-category',
+          amount: 50000,
+          recurrenceUnit: RecurrenceUnit.MONTH,
+          startedAt: '2026-01-01',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(repository.create).not.toHaveBeenCalled();
     });
   });
 
@@ -231,6 +389,117 @@ describe('UserSubscriptionsService', () => {
 
       expect(repository.update).toHaveBeenCalledWith('sub-1', expect.objectContaining({ notes: 'nueva nota' }), undefined);
     });
+
+    it('recomputes nextBillingDate when the recurrence changes', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(buildSubscription());
+      repository.update.mockResolvedValueOnce(buildSubscription({ recurrenceUnit: RecurrenceUnit.YEAR }));
+
+      await service.update('sub-1', userId, { recurrenceUnit: RecurrenceUnit.YEAR });
+
+      const [, data] = repository.update.mock.calls[0];
+      // startedAt is 2026-01-10; a yearly cadence puts the next charge a year out.
+      expect(data.nextBillingDate).toEqual(new Date('2027-01-10T00:00:00.000Z'));
+    });
+
+    it('leaves nextBillingDate alone when the recurrence is untouched', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(buildSubscription());
+      repository.update.mockResolvedValueOnce(buildSubscription());
+
+      await service.update('sub-1', userId, { notes: 'sin cambios de ciclo' });
+
+      const [, data] = repository.update.mock.calls[0];
+      expect(data.nextBillingDate).toBeUndefined();
+    });
+
+    it('honours an explicit nextBillingDate over the derived one', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(buildSubscription());
+      repository.update.mockResolvedValueOnce(buildSubscription());
+
+      await service.update('sub-1', userId, {
+        recurrenceUnit: RecurrenceUnit.YEAR,
+        nextBillingDate: '2026-12-01T00:00:00.000Z',
+      });
+
+      const [, data] = repository.update.mock.calls[0];
+      expect(data.nextBillingDate).toEqual(new Date('2026-12-01T00:00:00.000Z'));
+    });
+  });
+
+  describe('custom logo', () => {
+    const file = {
+      buffer: Buffer.from('fake'),
+      mimetype: 'image/png',
+      size: 1024,
+    } as Express.Multer.File;
+
+    it('rejects an upload for a catalog-backed subscription', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(buildSubscription());
+
+      await expect(service.uploadLogo('sub-1', userId, file)).rejects.toThrow(BadRequestException);
+      expect(storageService.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unsupported format', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(buildSubscription({ providerId: null, provider: null }));
+
+      await expect(
+        service.uploadLogo('sub-1', userId, { ...file, mimetype: 'application/pdf' } as Express.Multer.File),
+      ).rejects.toThrow(BadRequestException);
+      expect(storageService.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects a file over 2 MB', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(buildSubscription({ providerId: null, provider: null }));
+
+      await expect(
+        service.uploadLogo('sub-1', userId, { ...file, size: 3 * 1024 * 1024 } as Express.Multer.File),
+      ).rejects.toThrow(BadRequestException);
+      expect(storageService.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('uploads under a user-partitioned key and deletes the previous object', async () => {
+      const custom = buildSubscription({
+        providerId: null,
+        provider: null,
+        customName: 'Gimnasio',
+        customLogoUrl: 'user-subscription-logos/user-1/sub-1_1.png',
+      });
+      repository.findByIdAndUser.mockResolvedValue(custom);
+      repository.update.mockResolvedValueOnce(
+        buildSubscription({ providerId: null, provider: null, customLogoUrl: 'user-subscription-logos/user-1/sub-1_2.png' }),
+      );
+
+      await service.uploadLogo('sub-1', userId, file);
+
+      expect(storageService.deleteFile).toHaveBeenCalledWith('user-subscription-logos/user-1/sub-1_1.png');
+      const [buffer, key, mimetype] = storageService.uploadFile.mock.calls[0];
+      expect(key).toMatch(/^user-subscription-logos\/user-1\/sub-1_\d+\.png$/);
+      expect(mimetype).toBe('image/png');
+      expect(buffer).toBe(file.buffer);
+    });
+  });
+
+  describe('logo resolution on read', () => {
+    it('signs an uploaded S3 key', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(
+        buildSubscription({ providerId: null, provider: null, customLogoUrl: 'user-subscription-logos/user-1/sub-1.png' }),
+      );
+
+      const result = await service.findOneForUser('sub-1', userId);
+
+      expect(result.customLogoUrl).toBe('https://signed.example.com/user-subscription-logos/user-1/sub-1.png');
+    });
+
+    it('leaves an absolute catalog URL untouched', async () => {
+      repository.findByIdAndUser.mockResolvedValueOnce(
+        buildSubscription({ customLogoUrl: 'https://cdn.simpleicons.org/netflix' }),
+      );
+
+      const result = await service.findOneForUser('sub-1', userId);
+
+      expect(result.customLogoUrl).toBe('https://cdn.simpleicons.org/netflix');
+      expect(storageService.getPresignedUrl).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateStatus', () => {
@@ -256,12 +525,12 @@ describe('UserSubscriptionsService', () => {
   });
 
   describe('getSummary', () => {
-    it('aggregates monthly totals across active subscriptions, normalizing by billing cycle', async () => {
-      const monthly = buildSubscription({ id: 'sub-1', amount: new Prisma.Decimal(34900), billingCycle: BillingCycle.MONTHLY });
+    it('aggregates monthly totals across active subscriptions, normalizing by recurrence', async () => {
+      const monthly = buildSubscription({ id: 'sub-1', amount: new Prisma.Decimal(34900) });
       const yearly = buildSubscription({
         id: 'sub-2',
         amount: new Prisma.Decimal(120000),
-        billingCycle: BillingCycle.YEARLY,
+        recurrenceUnit: RecurrenceUnit.YEAR,
         cardId: null,
         card: null,
         provider: null,
@@ -275,6 +544,9 @@ describe('UserSubscriptionsService', () => {
       expect(summary.monthlyTotal).toBe('44900.00'); // 34900 + 120000/12
       expect(summary.activeCount).toBe(2);
       expect(summary.byCard).toHaveLength(2); // one real card + "Sin tarjeta asignada"
+      expect(summary.preferredCurrency).toBe('COP');
+      expect(summary.monthlyTotalConverted).toBe('44900.00');
+      expect(summary.rates.unavailable).toBe(false);
     });
 
     it('excludes PAUSED subscriptions from monthlyTotal but counts them separately', async () => {
@@ -286,6 +558,46 @@ describe('UserSubscriptionsService', () => {
       expect(summary.monthlyTotal).toBe('0.00');
       expect(summary.pausedCount).toBe(1);
       expect(summary.activeCount).toBe(0);
+    });
+
+    it('breaks totals down per currency without folding them together', async () => {
+      const inCop = buildSubscription({ id: 'sub-cop', amount: new Prisma.Decimal(34900), currency: 'COP' });
+      const inUsd = buildSubscription({ id: 'sub-usd', amount: new Prisma.Decimal(10), currency: 'USD' });
+      repository.findAllActiveForUser.mockResolvedValueOnce([inCop, inUsd]);
+
+      const summary = await service.getSummary(userId, {});
+
+      const cop = summary.byCurrency.find((c) => c.currency === 'COP')!;
+      const usd = summary.byCurrency.find((c) => c.currency === 'USD')!;
+      expect(cop.total).toBe('34900.00');
+      expect(usd.total).toBe('10.00'); // raw amount preserved, never rewritten
+      expect(usd.convertedTotal).toBe('40000.00'); // 10 / 0.00025
+    });
+
+    it('keeps one-time charges out of the run rate but reports them separately', async () => {
+      const oneTime = buildSubscription({
+        id: 'sub-once',
+        amount: new Prisma.Decimal(50000),
+        isRecurring: false,
+        nextBillingDate: new Date('2026-08-15T00:00:00.000Z'),
+      });
+      repository.findAllActiveForUser.mockResolvedValueOnce([oneTime]);
+
+      const summary = await service.getSummary(userId, { month: '2026-08' });
+
+      expect(summary.monthlyTotal).toBe('0.00');
+      expect(summary.oneTimeTotalThisMonth).toBe('50000.00');
+    });
+
+    it('still returns a summary when no exchange rates are available', async () => {
+      fxRateService.getPivotTable.mockResolvedValueOnce({ table: null, stale: false, unavailable: true });
+      repository.findAllActiveForUser.mockResolvedValueOnce([buildSubscription()]);
+
+      const summary = await service.getSummary(userId, {});
+
+      expect(summary.monthlyTotal).toBe('34900.00'); // raw figures survive
+      expect(summary.monthlyTotalConverted).toBeNull();
+      expect(summary.rates.unavailable).toBe(true);
     });
   });
 
@@ -398,12 +710,10 @@ describe('UserSubscriptionsService', () => {
 
   describe('getCashFlowCalendar', () => {
     it('projects charges into the requested month and groups totals by card cycle', async () => {
-      // Local-time constructor (not a UTC 'Z' ISO string) — matches how the
-      // service builds its month range boundaries, avoiding a day-off diff
-      // across timezones.
+      // UTC throughout: the service's month range and the recurrence helper
+      // both work in UTC, so a local-time date would land on the wrong day.
       const sub = buildSubscription({
-        nextBillingDate: new Date(2026, 7, 10),
-        billingCycle: BillingCycle.MONTHLY,
+        nextBillingDate: new Date('2026-08-10T00:00:00.000Z'),
       });
       repository.findAllActiveForUser.mockResolvedValueOnce([sub]);
       cardsService.findAllForUser.mockResolvedValueOnce([mockCard]);
@@ -417,6 +727,35 @@ describe('UserSubscriptionsService', () => {
       const cardSummary = calendar.byCard.find((c) => c.cardId === 'card-1')!;
       expect(cardSummary.needsSetup).toBe(false);
       expect(cardSummary.cycleTotal).toBe('34900.00');
+    });
+
+    it('places a one-time charge exactly once', async () => {
+      const sub = buildSubscription({
+        isRecurring: false,
+        nextBillingDate: new Date('2026-08-10T00:00:00.000Z'),
+      });
+      repository.findAllActiveForUser.mockResolvedValueOnce([sub]);
+      cardsService.findAllForUser.mockResolvedValueOnce([mockCard]);
+
+      const calendar = await service.getCashFlowCalendar(userId, { month: '2026-08' });
+
+      expect(calendar.days).toHaveLength(1);
+      expect(calendar.days[0].charges).toHaveLength(1);
+    });
+
+    it('routes a charge into the cycle of its own cutoff day when overridden', async () => {
+      // Card statement day is 15; the override moves this charge into the
+      // cycle that starts on the 5th instead.
+      const sub = buildSubscription({
+        billingCutoffDay: 5,
+        nextBillingDate: new Date('2026-08-10T00:00:00.000Z'),
+      });
+      repository.findAllActiveForUser.mockResolvedValueOnce([sub]);
+      cardsService.findAllForUser.mockResolvedValueOnce([mockCard]);
+
+      const calendar = await service.getCashFlowCalendar(userId, { month: '2026-08' });
+
+      expect(calendar.byCard.find((c) => c.cardId === 'card-1')!.cycleTotal).toBe('34900.00');
     });
 
     it('flags cards without a configured statementDay as needsSetup', async () => {

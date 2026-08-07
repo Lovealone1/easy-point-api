@@ -1,6 +1,8 @@
 import {
   Controller, Get, Post, Put, Body, Patch, Param, Delete, UseGuards, Query, HttpCode, HttpStatus,
+  UseInterceptors, UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserSubscriptionsService } from './user-subscriptions.service.js';
 import { CreateUserSubscriptionDto } from './dto/create-user-subscription.dto.js';
 import { UpdateUserSubscriptionDto } from './dto/update-user-subscription.dto.js';
@@ -10,7 +12,8 @@ import { GetSubscriptionsSummaryDto } from './dto/get-subscriptions-summary.dto.
 import { LogUsageCheckinDto } from './dto/log-usage-checkin.dto.js';
 import { FindUsageCheckinsDto } from './dto/find-usage-checkins.dto.js';
 import { GetCashFlowCalendarDto } from './dto/get-cash-flow-calendar.dto.js';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiBadRequestResponse } from '@nestjs/swagger';
+import { UploadSubscriptionLogoDto } from './dto/upload-subscription-logo.dto.js';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiBadRequestResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { AllowWithoutSubscription } from '../../common/decorators/allow-without-subscription.decorator.js';
@@ -118,6 +121,33 @@ export class UserSubscriptionsController {
   @ApiNotFoundResponse({ description: 'Subscription not found.' })
   logUsageCheckin(@Param('id') id: string, @Body() dto: LogUsageCheckinDto, @CurrentUser('sub') userId: string) {
     return this.subscriptionsService.logUsageCheckin(id, userId, dto);
+  }
+
+  @Post(':id/logo')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ description: 'Logo file (PNG, JPG, WEBP, SVG — máx. 2 MB)', type: UploadSubscriptionLogoDto })
+  @ApiOperation({
+    summary: 'Upload a logo for a custom subscription',
+    description: 'Only for custom subscriptions; catalog-backed ones use the provider logo.',
+  })
+  @ApiOkResponse({ description: 'Logo uploaded.' })
+  @ApiBadRequestResponse({ description: 'Catalog-backed subscription, unsupported format, or file too large.' })
+  @ApiNotFoundResponse({ description: 'Subscription not found.' })
+  uploadLogo(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.subscriptionsService.uploadLogo(id, userId, file);
+  }
+
+  @Delete(':id/logo')
+  @ApiOperation({ summary: 'Remove the custom logo of a subscription' })
+  @ApiOkResponse({ description: 'Logo removed.' })
+  @ApiNotFoundResponse({ description: 'Subscription not found.' })
+  deleteLogo(@Param('id') id: string, @CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.deleteLogo(id, userId);
   }
 
   @Delete(':id')

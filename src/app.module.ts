@@ -59,6 +59,10 @@ import { HealthModule } from './modules/health/health.module.js';
 import { SubscriptionCatalogModule } from './modules/subscription-catalog/subscription-catalog.module.js';
 import { UserPaymentCardsModule } from './modules/user-payment-cards/user-payment-cards.module.js';
 import { UserSubscriptionsModule } from './modules/user-subscriptions/user-subscriptions.module.js';
+import { CurrenciesModule } from './modules/currencies/currencies.module.js';
+import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module.js';
+import { UserPreferencesModule } from './modules/user-preferences/user-preferences.module.js';
+import { UserSubscriptionCategoriesModule } from './modules/user-subscription-categories/user-subscription-categories.module.js';
 
 @Module({
   imports: [
@@ -128,6 +132,10 @@ import { UserSubscriptionsModule } from './modules/user-subscriptions/user-subsc
     SubscriptionCatalogModule,
     UserPaymentCardsModule,
     UserSubscriptionsModule,
+    CurrenciesModule,
+    ExchangeRatesModule,
+    UserPreferencesModule,
+    UserSubscriptionCategoriesModule,
   ],
   controllers: [],
   providers: [
