@@ -82,15 +82,23 @@ export class AuthController {
     const refreshTokenString = request.cookies?.refresh_token;
 
     if (!refreshTokenString) {
+      this.clearAuthCookies(response);
       throw new UnauthorizedException('Refresh token missing from cookies');
     }
 
-    const result = await this.authService.refreshToken(refreshTokenString);
-    const { accessToken, refreshToken, ...rest } = result;
+    try {
+      const result = await this.authService.refreshToken(refreshTokenString);
+      const { accessToken, refreshToken, ...rest } = result;
 
-    this.setAuthCookies(response, accessToken, refreshToken);
+      this.setAuthCookies(response, accessToken, refreshToken);
 
-    return rest;
+      return rest;
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        this.clearAuthCookies(response);
+      }
+      throw error;
+    }
   }
 
   @Get('me')

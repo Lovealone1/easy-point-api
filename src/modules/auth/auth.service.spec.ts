@@ -57,7 +57,7 @@ describe('AuthService', () => {
           provide: PrismaService,
           useValue: {
             user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-            refreshToken: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn(), deleteMany: jest.fn() },
+            refreshToken: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn().mockResolvedValue(undefined), deleteMany: jest.fn() },
             $transaction: jest.fn().mockImplementation((cb) => cb(prismaService)),
             $systemTransaction: jest.fn().mockImplementation((cb) => cb(prismaService)),
           },
@@ -156,6 +156,35 @@ describe('AuthService', () => {
   });
 
   describe('refreshToken', () => {
+    it.each(['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'])('rejects %s as unauthorized', async (name) => {
+      jwtService.verifyAsync.mockRejectedValueOnce(Object.assign(new Error('invalid token'), { name }));
+      await expect(service.refreshToken('stale')).rejects.toThrow(UnauthorizedException);
+      expect(prismaService.refreshToken.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('preserves database failures instead of reporting an expired session', async () => {
+      jwtService.verifyAsync.mockResolvedValueOnce({ sub: 'user-1', sid: 'session-1' });
+      const failure = new Error('database unavailable');
+      prismaService.refreshToken.findUnique.mockRejectedValueOnce(failure);
+      await expect(service.refreshToken('valid')).rejects.toBe(failure);
+    });
+
+    it('preserves Redis failures instead of reporting a revoked session', async () => {
+      jwtService.verifyAsync.mockResolvedValueOnce({ sub: 'user-1', sid: 'session-1' });
+      prismaService.refreshToken.findUnique.mockResolvedValueOnce({ userId: 'user-1', expiresAt: new Date(Date.now() + 100000) });
+      const failure = new Error('Redis unavailable');
+      redisCacheService.get.mockRejectedValueOnce(failure);
+      await expect(service.refreshToken('valid')).rejects.toBe(failure);
+      expect(prismaService.refreshToken.delete).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expired database token', async () => {
+      jwtService.verifyAsync.mockResolvedValueOnce({ sub: 'user-1' });
+      prismaService.refreshToken.findUnique.mockResolvedValueOnce({ id: 'old', userId: 'user-1', expiresAt: new Date(0) });
+      await expect(service.refreshToken('stale')).rejects.toThrow(UnauthorizedException);
+      expect(prismaService.refreshToken.delete).toHaveBeenCalledWith({ where: { id: 'old' } });
+    });
+
     it('should successfully rotate tokens if session is active', async () => {
       const decodedPayload = { sub: 'user-1', email: 'test@test.com', role: 'USER', sid: 'session-123', ip: '127.0.0.1', userAgent: 'agent' };
       jwtService.verifyAsync.mockResolvedValueOnce(decodedPayload);

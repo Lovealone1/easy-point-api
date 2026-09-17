@@ -351,7 +351,11 @@ export class AuthService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      if (error instanceof Error && ['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'].includes(error.name)) {
+        throw new UnauthorizedException('Invalid or expired refresh token');
+      }
+      // Infrastructure failures must not masquerade as an invalid session.
+      throw error;
     }
   }
 
