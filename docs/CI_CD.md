@@ -190,11 +190,42 @@ address gets handed a registry token and a shell command.
 | `DEPLOY_SSH_KEY` | secret | contents of `ci_deploy` (the private half) |
 | `DEPLOY_KNOWN_HOSTS` | secret | `ssh-keyscan` output for the host |
 | `DEPLOY_DIR` | variable | optional; defaults to `/opt/easy-point-api` |
+| `DEPLOY_STACK` | variable | **required**: `cloudsql` or `selfhosted` — see below |
 
 No registry credential is stored. The deploy logs the server into GHCR with the
 job's own `GITHUB_TOKEN`, which expires when the job ends, and logs it out
 again afterwards — so a compromised VPS does not yield a registry credential
 that outlives the incident.
+
+### `DEPLOY_STACK`, and why it has no default
+
+The repository ships two production topologies, and they put the API on
+different databases:
+
+| Value | Compose files | Postgres |
+|---|---|---|
+| `selfhosted` | `compose.yaml` + `compose.prod.yaml` | a container on the same box |
+| `cloudsql` | `compose.cloudsql.yaml` (standalone) | a Cloud SQL instance |
+
+Guessing wrong is not a crash. `compose.yaml` sets `DATABASE_URL` to a local
+`postgres` service, so a Cloud SQL server deployed as `selfhosted` comes up
+**healthy**, having just run `prisma migrate deploy` against an empty database
+nobody asked for — while the real one sits untouched and the app serves
+nothing. That failure is quiet, and from the outside it looks like a
+successful deploy.
+
+So there is no default and no fallback in the workflow: an unset
+`DEPLOY_STACK` makes `deploy.sh` refuse to start. To find out which one a
+server is, look at what its deploy directory holds:
+
+```bash
+ls /opt/easy-point-api/compose*.yaml
+docker compose ls
+```
+
+`compose.registry.yaml` layers onto either base — it only swaps `build` for
+`image` on `easy-point-api` and `migrate`, and both stacks name those services
+the same way.
 
 ### GHCR visibility
 
