@@ -4,6 +4,7 @@ import { OrganizationUsersService } from './organization-users.service.js';
 import { OrganizationUsersRepository } from './organization-users.repository.js';
 import { OrganizationUserEntity } from './domain/organization-user.entity.js';
 import { Role } from '../../common/enums/role.enum.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
 
 // ── Tenant context mock ────────────────────────────────────────────────────────
 jest.mock('../../common/context/tenant.context.js', () => ({
@@ -37,6 +38,12 @@ const mockRepo = {
   delete:                            jest.fn(),
 };
 
+const mockPrisma = {
+  organization: { findUnique: jest.fn() },
+  organizationUser: { count: jest.fn() },
+  subscription: { findFirst: jest.fn() },
+};
+
 describe('OrganizationUsersService', () => {
   let service: OrganizationUsersService;
 
@@ -45,6 +52,10 @@ describe('OrganizationUsersService', () => {
       providers: [
         OrganizationUsersService,
         { provide: OrganizationUsersRepository, useValue: mockRepo },
+        // The service reads the organization's seat limit through Prisma; the
+        // cases below never reach that path, but the container still has to
+        // be able to construct it.
+        { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
 

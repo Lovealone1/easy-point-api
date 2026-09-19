@@ -59,7 +59,10 @@ services:
   social-redis:
     image: redis:7-alpine
     container_name: social-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD} --logLevel warning
+    # --appendonly yes matches production. Without it a dev Redis only keeps
+    # the periodic RDB snapshot, so restarting the stack loses recent sessions
+    # and a session-persistence change looks broken locally when it is not.
+    command: redis-server --requirepass ${REDIS_PASSWORD} --logLevel warning --appendonly yes
     restart: unless-stopped
     ports:
       # Loopback-only — was previously exposed to 0.0.0.0.

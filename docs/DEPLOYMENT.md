@@ -212,11 +212,25 @@ A backup that has never been restored is a hypothesis, not a backup. Do this bef
 
 ## 7. Updates & rollback
 
+> **Routine updates go through CI/CD, not through this section.** A push to
+> `master` builds the image on a runner and replaces the API container on the
+> server, with a readiness gate and an automatic rollback — see
+> **[docs/CI_CD.md](./CI_CD.md)**, which also explains why a deploy does not
+> sign anybody out of their session.
+>
+> The commands below are the manual equivalent, for a server that has not been
+> connected to the pipeline yet or for a deploy you need to drive by hand.
+
 ```bash
 git pull
 docker compose -f compose.yaml -f compose.prod.yaml --profile migrate run --rm migrate
-docker compose -f compose.yaml -f compose.prod.yaml up -d --build easy-point-api
+docker compose -f compose.yaml -f compose.prod.yaml up -d --build --no-deps easy-point-api
 ```
+
+`--no-deps` matters: without it Compose may recreate `postgres` and
+`social-redis` alongside the API, and recreating Redis ends every live session.
+Never add `-v` to a `down` on this box — it deletes the database and session
+volumes.
 
 Prisma migrations are additive/forward-only by default — if a deploy needs to be rolled back, `git checkout` the previous commit and rebuild; only reach for a down-migration if the schema change itself needs reverting (rare, and should be a hand-written migration, not `prisma migrate reset`).
 

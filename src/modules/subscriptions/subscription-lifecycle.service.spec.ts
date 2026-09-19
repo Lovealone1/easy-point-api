@@ -119,10 +119,13 @@ describe('SubscriptionLifecycleService', () => {
       });
     });
 
-    it('should ignore FREE subscriptions', async () => {
+    it('expires a FREE subscription like any other, because FREE is a trial', async () => {
+      // This test used to assert the opposite. FREE stopped being a permanent
+      // tier and became a 7-day trial, so exempting it from expiry would have
+      // handed every account an unlimited free plan.
       const mockSubFree = {
         id: 'sub-free',
-        status: SubscriptionStatus.ACTIVE,
+        status: SubscriptionStatus.TRIALING,
         plan: mockFreePlan,
       };
 
@@ -130,8 +133,19 @@ describe('SubscriptionLifecycleService', () => {
 
       await service.expireDueSubscriptions();
 
-      expect(prisma.subscription.update).not.toHaveBeenCalled();
-      expect(prisma.subscriptionStatusLog.create).not.toHaveBeenCalled();
+      expect(prisma.subscription.update).toHaveBeenCalledWith({
+        where: { id: 'sub-free' },
+        data: { status: SubscriptionStatus.EXPIRED },
+      });
+      expect(prisma.subscriptionStatusLog.create).toHaveBeenCalledWith({
+        data: {
+          subscriptionId: 'sub-free',
+          fromStatus: SubscriptionStatus.TRIALING,
+          toStatus: SubscriptionStatus.EXPIRED,
+          reason: 'Trial period ended (currentPeriodEnd reached)',
+          triggeredBy: 'cron',
+        },
+      });
     });
   });
 

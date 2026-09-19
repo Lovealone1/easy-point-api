@@ -35,3 +35,10 @@ coverage
 docs
 *.md
 !README.md
+
+# Infraestructura de despliegue: la imagen no la usa, y dejarla dentro hace que
+# editar un workflow invalide la caché de la capa `COPY . .` de la etapa build.
+.github
+deploy
+compose*.yaml
+Caddyfile
