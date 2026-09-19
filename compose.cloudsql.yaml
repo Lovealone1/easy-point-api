@@ -2,6 +2,15 @@
 # Do not combine with compose.yaml or compose.prod.yaml.
 # PostgreSQL and its backups are managed in Cloud SQL. Set DATABASE_URL to
 # the restricted runtime role and DIRECT_URL to the migration/schema owner.
+#
+# Both URLs need explicit TLS parameters, and they are NOT the same string,
+# because two different clients parse them (see docs/DEPLOYMENT.md §9).
+#
+#   DATABASE_URL=postgresql://app:***@<host>:5432/<db>?uselibpqcompat=true&sslmode=verify-ca&sslrootcert=/etc/ssl/cloudsql/server-ca.pem
+#   DIRECT_URL=postgresql://owner:***@<host>:5432/<db>?sslmode=require
+#
+# Quote both values in .env: the unquoted & truncates the URL at the first
+# parameter when Compose interpolates it.
 
 x-logging: &logging
   driver: json-file
@@ -16,6 +25,12 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
+    volumes:
+      # Cloud SQL signs its server certificate with a per-instance CA that is
+      # not in the image's trust store, so sslrootcert must point at a file the
+      # container can actually see. Download it from the instance's
+      # Connections > Security tab into ./certs.
+      - ./certs:/etc/ssl/cloudsql:ro
     environment:
       NODE_ENV: production
       PORT: "3001"
