@@ -1,6 +1,6 @@
-import { IsEmail, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { AuthIntent } from '../enums/auth-intent.enum.js';
+import { AuthIntent, CLIENT_REQUESTABLE_INTENTS } from '../enums/auth-intent.enum.js';
 
 export class GenerateOtpDto {
   @ApiProperty({
@@ -16,7 +16,7 @@ export class GenerateOtpDto {
     enum: AuthIntent,
     example: AuthIntent.LOGIN,
   })
-  @IsEnum(AuthIntent, { message: 'Intent must be LOGIN or REGISTER' })
+  @IsIn(CLIENT_REQUESTABLE_INTENTS, { message: 'Intent must be LOGIN or REGISTER' })
   @IsNotEmpty({ message: 'Intent is required' })
   intent: AuthIntent;
 }

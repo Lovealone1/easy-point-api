@@ -1,10 +1,10 @@
 import { Injectable, Logger, NestMiddleware, BadRequestException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { GlobalRole } from '@prisma/client';
+import { GlobalRole, SessionScope } from '@prisma/client';
 import { tenantContextStorage, TenantContext } from '../context/tenant.context.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
-type RequestWithUser = Request & { user?: { role?: string } };
+type RequestWithUser = Request & { user?: { role?: string; scope?: string } };
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -39,16 +39,20 @@ export class TenantMiddleware implements NestMiddleware {
       }
     }
 
-    // Only a Global Admin may bypass tenant scoping. AuthContextMiddleware
-    // (which runs before this middleware) populates req.user when a valid
-    // JWT is present, so this is safe to check here.
+    // Only a Global Admin on a console session may bypass tenant scoping.
+    // AuthContextMiddleware (which runs before this middleware) populates
+    // req.user when a valid JWT is present, so this is safe to check here.
+    // The scope matters as much as the role: a global admin browsing their own
+    // dashboard must stay inside RLS like everyone else, or the split we drew
+    // in OrgRolesGuard leaks straight back in through this header.
     const bypassRequested = req.headers['x-bypass-tenant'] === 'true';
-    const isGlobalAdmin = req.user?.role === GlobalRole.ADMIN;
-    const bypassTenant = bypassRequested && isGlobalAdmin;
+    const isConsoleAdmin =
+      req.user?.role === GlobalRole.ADMIN && req.user?.scope === SessionScope.ADMIN;
+    const bypassTenant = bypassRequested && isConsoleAdmin;
 
-    if (bypassRequested && !isGlobalAdmin) {
+    if (bypassRequested && !isConsoleAdmin) {
       this.logger.warn(
-        `Rejected x-bypass-tenant request from non-admin caller (${req.method} ${req.originalUrl})`,
+        `Rejected x-bypass-tenant request without an admin console session (${req.method} ${req.originalUrl})`,
       );
     }
 

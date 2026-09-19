@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import type { ConfigType } from '@nestjs/config';
 import appConfig from '../config/config.js';
 import { getTenantContext } from '../context/tenant.context.js';
+import { ACCESS_COOKIE_NAMES } from '../../modules/auth/session.constants.js';
 
 /**
  * Best-effort JWT decoding that runs BEFORE the guards, so that request.user
@@ -55,6 +56,18 @@ export class AuthContextMiddleware implements NestMiddleware {
       return headerToken;
     }
 
-    return request.cookies?.access_token;
+    // Cookie fallback, console first: a browser signed into both applications
+    // carries both cookies, and the more privileged one is what the downstream
+    // header checks need to see. Only best-effort context either way —
+    // JwtAuthGuard is still the one that authenticates, off the Bearer header
+    // the BFF always sets.
+    for (const name of ACCESS_COOKIE_NAMES) {
+      const cookieToken = request.cookies?.[name];
+      if (cookieToken) {
+        return cookieToken;
+      }
+    }
+
+    return undefined;
   }
 }

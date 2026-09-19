@@ -2,13 +2,21 @@ import { EMAIL_LOGO_SRC } from '../../infraestructure/mail/templates/email.utils
 import { Inject, Injectable, Logger, ForbiddenException, UnauthorizedException, NotFoundException, HttpException, HttpStatus, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { GlobalRole } from '@prisma/client';
+import { GlobalRole, SessionScope } from '@prisma/client';
 import type { ConfigType } from '@nestjs/config';
 import appConfig from '../../common/config/config.js';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
 import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { GenerateOtpDto } from './dto/generate-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
+import { AuthIntent } from './enums/auth-intent.enum.js';
+import {
+  ADMIN_ACCESS_DENIED,
+  otpCooldownKey,
+  otpHourlyCountKey,
+  sessionMetadataKey,
+  userSessionsKey,
+} from './session.constants.js';
 import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.template.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { AuditService } from '../../infraestructure/audit/audit.service.js';
@@ -36,6 +44,23 @@ export class AuthService {
     return this.config.app.env === 'production' ? 120 : 900;
   }
 
+  /**
+   * How long a session lives, per application. A console session is worth far
+   * more than a dashboard one, so it expires in hours rather than weeks.
+   */
+  private getSessionTtlSeconds(scope: SessionScope): number {
+    const ms =
+      scope === SessionScope.ADMIN
+        ? this.config.jwt.adminRefreshExpiresInMs
+        : this.config.jwt.refreshExpiresInMs;
+    return Math.floor(ms / 1000);
+  }
+
+  /** Which of the two applications an OTP flow is authenticating into. */
+  private scopeForIntent(intent: string): SessionScope {
+    return intent === AuthIntent.ADMIN_LOGIN ? SessionScope.ADMIN : SessionScope.TENANT;
+  }
+
   constructor(
     @Inject(appConfig.KEY)
     private readonly config: ConfigType<typeof appConfig>,
@@ -57,8 +82,11 @@ export class AuthService {
 
     // PRODUCTION SECURITY: Cooldown and Hourly Limits
     if (this.config.app.env === 'production') {
-      const cooldownKey = `otp:cooldown:${email}`;
-      const hourlyKey = `otp:hourly_count:${email}`;
+      // Namespaced per application: opening the console is a separate act from
+      // opening the dashboard, so the two flows must not lock each other out.
+      const scope = this.scopeForIntent(intent);
+      const cooldownKey = otpCooldownKey(scope, email);
+      const hourlyKey = otpHourlyCountKey(scope, email);
 
       const [hasCooldown, hourlyRequests] = await Promise.all([
         this.redisCacheService.get<string>(cooldownKey),
@@ -101,6 +129,43 @@ export class AuthService {
     return {
       message: 'OTP code generated locally (Dev)',
     };
+  }
+
+  /**
+   * Issues a console sign-in code, but only to an address that can actually
+   * use one.
+   *
+   * An address that is not an active global admin gets the same response and
+   * no email: the console must not confirm which addresses hold admin rights,
+   * and a stranger who guesses an employee email should not receive a message
+   * telling them an administration console exists.
+   */
+  async generateAdminOtp(email: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { email },
+      select: { id: true, globalRole: true, isActive: true },
+    });
+
+    if (user?.globalRole !== GlobalRole.ADMIN || !user.isActive) {
+      this.logger.warn(`Console sign-in code requested for ineligible address ${email}`);
+      this.auditService.log({
+        action: AuditAction.LOGIN_FAILED,
+        resourceType: 'Session',
+        userId: user?.id,
+        metadata: { email, reason: 'CONSOLE_OTP_FOR_INELIGIBLE_ADDRESS' },
+        severity: AuditSeverity.CRITICAL,
+      });
+      // Same shape as the happy path. Route-level rate limiting still applies,
+      // so this is not a free enumeration oracle.
+      return { message: 'OTP code sent via email' };
+    }
+
+    // In development the code is logged instead of emailed, matching how the
+    // dashboard flow behaves through DevelopmentController. generateOtp
+    // refuses dev mode outside a development environment, so this cannot leak
+    // into production.
+    const isDevMode = this.config.app.env === 'development';
+    return this.generateOtp({ email, intent: AuthIntent.ADMIN_LOGIN }, isDevMode);
   }
 
   async verifyOtp(payload: VerifyOtpDto) {
@@ -146,10 +211,22 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired OTP code');
     }
 
-    // 2. Consume OTP and reset attempts
+    // 2. Consume OTP, reset attempts, and refund the request that got us here.
+    //
+    // The hourly budget exists to stop someone mail-bombing an address they do
+    // not control. A correct code proves the opposite, so charging for it is
+    // friction with nothing bought: three ordinary sign-ins in an hour would
+    // otherwise lock the account out of requesting a fourth code.
+    //
+    // Only the successful request is given back, not the whole budget — codes
+    // that were requested and never used still count, which is exactly the
+    // pattern the limit is watching for.
     await Promise.all([
       this.redisCacheService.delete(cacheKey),
       this.redisCacheService.delete(attemptsKey),
+      this.redisCacheService.decrIfPresent(
+        otpHourlyCountKey(this.scopeForIntent(intent), email),
+      ),
     ]);
 
     // 3. Database operations (Prisma)
@@ -157,7 +234,14 @@ export class AuthService {
       where: { email },
     });
 
-    if (intent === 'LOGIN') {
+    if (intent === AuthIntent.ADMIN_LOGIN) {
+      // Never creates or mutates an account, and never says whether the
+      // address exists: the console must not become an oracle for which
+      // addresses hold admin rights. The role itself is checked by the caller.
+      if (!user) {
+        throw new ForbiddenException(ADMIN_ACCESS_DENIED);
+      }
+    } else if (intent === 'LOGIN') {
       if (!user) {
         throw new UnauthorizedException('User not found. Please register first.');
       }
@@ -257,13 +341,33 @@ export class AuthService {
     };
   }
 
-  async verifyOtpWithMetadata(payload: VerifyOtpDto, metadata: { ip: string; userAgent: string }) {
+  async verifyOtpWithMetadata(
+    payload: VerifyOtpDto,
+    metadata: { ip: string; userAgent: string },
+    scope: SessionScope = SessionScope.TENANT,
+  ) {
     const result = await this.verifyOtp(payload);
 
     // In verifyOtp we currently only return accessToken (stateless).
     // We need to replace that with the stateful token generation.
     const user = await this.prismaService.user.findUnique({ where: { email: payload.email } });
-    const { accessToken, refreshToken } = await this.generateAuthTokens(user!.id, user!.email, user!.globalRole!, metadata);
+
+    // The code proved the address; it does not prove the account may enter the
+    // console. Checked before the token is minted, and reported with the same
+    // message a non-existent account gets.
+    if (scope === SessionScope.ADMIN && user?.globalRole !== GlobalRole.ADMIN) {
+      this.logger.warn(`Rejected console sign-in for ${payload.email}: not a global admin`);
+      this.auditService.log({
+        action: AuditAction.LOGIN_FAILED,
+        resourceType: 'Session',
+        userId: user?.id,
+        metadata: { email: payload.email, reason: 'NOT_A_GLOBAL_ADMIN', ip: metadata.ip },
+        severity: AuditSeverity.CRITICAL,
+      });
+      throw new ForbiddenException(ADMIN_ACCESS_DENIED);
+    }
+
+    const { accessToken, refreshToken } = await this.generateAuthTokens(user!.id, user!.email, user!.globalRole!, scope, metadata);
 
     // Audit: successful login
     this.auditService.log({
@@ -273,10 +377,11 @@ export class AuthService {
       metadata: {
         email: user!.email,
         intent: payload.intent,
+        sessionScope: scope,
         ip: metadata.ip,
         userAgent: metadata.userAgent,
       },
-      severity: AuditSeverity.LOW,
+      severity: scope === SessionScope.ADMIN ? AuditSeverity.HIGH : AuditSeverity.LOW,
     });
 
     return {
@@ -286,11 +391,20 @@ export class AuthService {
     };
   }
 
-  async refreshToken(refreshTokenString: string) {
+  async refreshToken(refreshTokenString: string, scope: SessionScope = SessionScope.TENANT) {
     try {
       const decoded = await this.jwtService.verifyAsync(refreshTokenString, {
         secret: this.config.jwt.refreshSecret,
       });
+
+      // Refusing a cross-application token is the whole point of the split: a
+      // console refresh token presented at the dashboard endpoint (or the
+      // reverse) must not be exchangeable for a session of the other kind.
+      // Checked against the claim AND the stored row, so neither a stale row
+      // nor a claim alone is enough.
+      if (decoded.scope !== scope) {
+        throw new UnauthorizedException('Invalid or revoked refresh token');
+      }
 
       // Compute deterministic hash of the provided refresh token
       const tokenHash = crypto.createHash('sha256').update(refreshTokenString).digest('hex');
@@ -301,7 +415,7 @@ export class AuthService {
         include: { user: true },
       });
 
-      if (!storedToken || storedToken.userId !== decoded.sub) {
+      if (!storedToken || storedToken.userId !== decoded.sub || storedToken.scope !== scope) {
         throw new UnauthorizedException('Invalid or revoked refresh token');
       }
 
@@ -313,7 +427,7 @@ export class AuthService {
 
       // Verify session exists in Redis and has not been killed/revoked
       if (decoded.sid) {
-        const sessionKey = `session_metadata:${decoded.sub}:${decoded.sid}`;
+        const sessionKey = sessionMetadataKey(scope, decoded.sub, decoded.sid);
         const isSessionActive = await this.redisCacheService.get(sessionKey);
         if (!isSessionActive) {
           // Clean up the DB token since the session is killed
@@ -329,7 +443,7 @@ export class AuthService {
       }
 
       this.logger.log(`Renewing access token for ${user.email}`);
-      const tokens = await this.generateAuthTokens(user.id, user.email, user.globalRole!, {
+      const tokens = await this.generateAuthTokens(user.id, user.email, user.globalRole!, scope, {
         ip: decoded.ip || 'unknown',
         userAgent: decoded.userAgent || 'unknown'
       });
@@ -340,8 +454,8 @@ export class AuthService {
       // Revoke old session from Redis during rotation to prevent memory leak and session list pollution
       if (decoded.sid) {
         await Promise.all([
-          this.redisCacheService.delete(`session_metadata:${user.id}:${decoded.sid}`),
-          this.redisCacheService.srem(`user_sessions:${user.id}`, decoded.sid),
+          this.redisCacheService.delete(sessionMetadataKey(scope, user.id, decoded.sid)),
+          this.redisCacheService.srem(userSessionsKey(scope, user.id), decoded.sid),
         ]);
       }
 
@@ -359,11 +473,13 @@ export class AuthService {
 
 
 
-  async getSessions(userId: string) {
-    const sessionIds = await this.redisCacheService.smembers(`user_sessions:${userId}`);
+  async getSessions(userId: string, scope: SessionScope = SessionScope.TENANT) {
+    // Scoped to the application the caller is signed into: the dashboard has
+    // no business listing console sessions, or offering to kill them.
+    const sessionIds = await this.redisCacheService.smembers(userSessionsKey(scope, userId));
     if (sessionIds.length === 0) return [];
 
-    const keys = sessionIds.map(sid => `session_metadata:${userId}:${sid}`);
+    const keys = sessionIds.map(sid => sessionMetadataKey(scope, userId, sid));
     const sessions = await this.redisCacheService.mget<SessionMetadata>(keys);
 
     // Filter out expired/null sessions and sort by creation
@@ -379,18 +495,24 @@ export class AuthService {
     if (expiredSids.length > 0) {
       // Clean up dead session IDs from the user's sessions set in Redis
       await Promise.all(
-        expiredSids.map(sid => this.redisCacheService.srem(`user_sessions:${userId}`, sid))
+        expiredSids.map(sid => this.redisCacheService.srem(userSessionsKey(scope, userId), sid))
       ).catch(err => this.logger.warn(`Failed to clean expired sessions: ${err.message}`));
     }
 
     return activeSessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  async logout(userId: string, sessionId: string, refreshTokenString?: string) {
-    // Delete session from Redis
+  async logout(
+    userId: string,
+    sessionId: string,
+    scope: SessionScope = SessionScope.TENANT,
+    refreshTokenString?: string,
+  ) {
+    // Only this application's session. Signing out of the console leaves the
+    // dashboard signed in, and the reverse.
     await Promise.all([
-      this.redisCacheService.delete(`session_metadata:${userId}:${sessionId}`),
-      this.redisCacheService.srem(`user_sessions:${userId}`, sessionId),
+      this.redisCacheService.delete(sessionMetadataKey(scope, userId, sessionId)),
+      this.redisCacheService.srem(userSessionsKey(scope, userId), sessionId),
     ]);
 
     // Delete the refresh token from the DB if it was provided
@@ -398,14 +520,14 @@ export class AuthService {
       try {
         const tokenHash = crypto.createHash('sha256').update(refreshTokenString).digest('hex');
         await this.prismaService.refreshToken.deleteMany({
-          where: { tokenHash, userId }
+          where: { tokenHash, userId, scope }
         });
       } catch (error) {
         this.logger.warn(`Failed to delete refresh token from DB during logout for user ${userId}: ${error.message}`);
       }
     }
 
-    this.logger.log(`Session ${sessionId} logged out for user ${userId}`);
+    this.logger.log(`Session ${sessionId} (${scope}) logged out for user ${userId}`);
 
     // Audit: logout
     this.auditService.log({
@@ -414,6 +536,7 @@ export class AuthService {
       resourceId: sessionId,
       userId,
       sessionId,
+      metadata: { sessionScope: scope },
       severity: AuditSeverity.LOW,
     });
 
@@ -421,10 +544,18 @@ export class AuthService {
   }
 
   async logoutAll(userId: string) {
-    const sessionIds = await this.redisCacheService.smembers(`user_sessions:${userId}`);
-    if (sessionIds.length > 0) {
-      const keysToDelete = sessionIds.map(sid => `session_metadata:${userId}:${sid}`);
-      keysToDelete.push(`user_sessions:${userId}`);
+    // The one operation that deliberately crosses the split: "sign out
+    // everywhere" is a panic button, and someone reaching for it means every
+    // session they hold, dashboard and console alike.
+    let sessionCount = 0;
+
+    for (const scope of Object.values(SessionScope)) {
+      const setKey = userSessionsKey(scope, userId);
+      const sessionIds = await this.redisCacheService.smembers(setKey);
+      sessionCount += sessionIds.length;
+
+      const keysToDelete = sessionIds.map(sid => sessionMetadataKey(scope, userId, sid));
+      keysToDelete.push(setKey);
 
       await Promise.all(keysToDelete.map(key => this.redisCacheService.delete(key)));
     }
@@ -434,22 +565,28 @@ export class AuthService {
       where: { userId }
     });
 
-    this.logger.log(`User ${userId} logged out from all devices`);
+    this.logger.log(`User ${userId} logged out from every device and both applications`);
 
     // Audit: logout all
     this.auditService.log({
       action: AuditAction.LOGOUT,
       resourceType: 'Session',
       userId,
-      metadata: { scope: 'ALL_DEVICES', sessionCount: sessionIds?.length ?? 0 },
+      metadata: { scope: 'ALL_DEVICES', sessionCount },
       severity: AuditSeverity.MEDIUM,
     });
 
     return { message: 'Logged out from all devices successfully' };
   }
 
-  async killSession(userId: string, sessionIdToKill: string) {
-    const sessionKey = `session_metadata:${userId}:${sessionIdToKill}`;
+  async killSession(
+    userId: string,
+    sessionIdToKill: string,
+    scope: SessionScope = SessionScope.TENANT,
+  ) {
+    // Scoped like getSessions: you may only kill sessions of the application
+    // you are currently signed into, and only your own.
+    const sessionKey = sessionMetadataKey(scope, userId, sessionIdToKill);
     const exists = await this.redisCacheService.get(sessionKey);
 
     if (!exists) {
@@ -458,7 +595,7 @@ export class AuthService {
 
     await Promise.all([
       this.redisCacheService.delete(sessionKey),
-      this.redisCacheService.srem(`user_sessions:${userId}`, sessionIdToKill),
+      this.redisCacheService.srem(userSessionsKey(scope, userId), sessionIdToKill),
     ]);
     this.logger.log(`Session ${sessionIdToKill} killed by user ${userId}`);
 
@@ -475,19 +612,30 @@ export class AuthService {
     return { message: 'Session terminated successfully' };
   }
 
-  private async generateAuthTokens(userId: string, email: string, role: GlobalRole, metadata: { ip: string; userAgent: string }) {
+  private async generateAuthTokens(
+    userId: string,
+    email: string,
+    role: GlobalRole,
+    scope: SessionScope,
+    metadata: { ip: string; userAgent: string },
+  ) {
     const sid = crypto.randomUUID();
+    // `scope` is what makes the two applications independent: every guard
+    // downstream reads it off the token rather than trusting a header, and the
+    // Redis keys below are namespaced by it so one session cannot revoke or
+    // even see the other.
     const jwtPayload = {
       sub: userId,
       email,
       role,
+      scope,
       sid,
       ip: metadata.ip,
       userAgent: metadata.userAgent
     };
 
-    // Set TTL to match the refresh token configuration
-    const ttlSeconds = Math.floor(this.config.jwt.refreshExpiresInMs / 1000);
+    // Set TTL to match the refresh token configuration for this application
+    const ttlSeconds = this.getSessionTtlSeconds(scope);
     const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
 
     const sessionData: SessionMetadata = {
@@ -500,15 +648,20 @@ export class AuthService {
 
     // Persist session to Redis
     await Promise.all([
-      this.redisCacheService.set(`session_metadata:${userId}:${sid}`, sessionData, ttlSeconds),
-      this.redisCacheService.sadd(`user_sessions:${userId}`, sid),
+      this.redisCacheService.set(sessionMetadataKey(scope, userId, sid), sessionData, ttlSeconds),
+      this.redisCacheService.sadd(userSessionsKey(scope, userId), sid),
     ]);
+
+    const refreshExpiresIn =
+      scope === SessionScope.ADMIN
+        ? this.config.jwt.adminRefreshExpiresIn
+        : this.config.jwt.refreshExpiresIn;
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(jwtPayload),
       this.jwtService.signAsync(jwtPayload, {
         secret: this.config.jwt.refreshSecret,
-        expiresIn: this.config.jwt.refreshExpiresIn as any,
+        expiresIn: refreshExpiresIn as any,
       }),
     ]);
 
@@ -518,6 +671,7 @@ export class AuthService {
       data: {
         tokenHash,
         userId,
+        scope,
         userAgent: metadata.userAgent,
         ipAddress: metadata.ip,
         expiresAt: new Date(expiresAt * 1000), // convert to ms

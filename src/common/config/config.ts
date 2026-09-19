@@ -74,6 +74,9 @@ interface AppConfigShape {
     refreshSecret: string;
     refreshExpiresIn: string;
     refreshExpiresInMs: number;
+    /** Console sessions expire far sooner than dashboard ones — see below. */
+    adminRefreshExpiresIn: string;
+    adminRefreshExpiresInMs: number;
   };
   s3: {
     endpoint: string;
@@ -401,6 +404,11 @@ export default registerAs('app', (): AppConfig => {
       refreshSecret: getString('JWT_REFRESH_SECRET'),
       refreshExpiresIn: getString('JWT_REFRESH_EXPIRES_IN', '30d'),
       refreshExpiresInMs: getDurationMs('JWT_REFRESH_EXPIRES_IN', 30 * 24 * 60 * 60 * 1000),
+      // A console session is worth far more than a dashboard one, so it lives
+      // for a working day rather than a month. Leaving the console open
+      // overnight costs one more emailed code, nothing else.
+      adminRefreshExpiresIn: getString('JWT_ADMIN_REFRESH_EXPIRES_IN', '8h'),
+      adminRefreshExpiresInMs: getDurationMs('JWT_ADMIN_REFRESH_EXPIRES_IN', 8 * 60 * 60 * 1000),
     },
     s3: {
       endpoint: getString('S3_ENDPOINT'),

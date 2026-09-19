@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '../enums/role.enum.js';
-import { OrganizationStatus, GlobalRole } from '@prisma/client';
+import { OrganizationStatus, GlobalRole, SessionScope } from '@prisma/client';
 import { ORG_ROLES_KEY } from '../decorators/org-roles.decorator.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { getTenantId } from '../context/tenant.context.js';
@@ -30,8 +30,12 @@ export class OrgRolesGuard implements CanActivate {
       throw new UnauthorizedException('User authentication is missing');
     }
 
-    // Global Admin Bypass: Global Admins can access any endpoint protected by OrgRolesGuard
-    if (user.role === GlobalRole.ADMIN) {
+    // Global Admin Bypass — but only from the administration console. In the
+    // dashboard a global admin is just another member: they reach the
+    // organizations they actually belong to, with the role they hold there.
+    // Reaching into an organization you are not a member of is a console act,
+    // and the console has its own sign-in.
+    if (user.role === GlobalRole.ADMIN && user.scope === SessionScope.ADMIN) {
       return true;
     }
 
