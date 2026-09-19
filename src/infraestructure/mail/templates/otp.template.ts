@@ -3,16 +3,21 @@ import { escapeHtml } from './email.utils.js';
 export function getOtpEmailTemplate(otp: string, intent: string, logoUrl: string, ttlSeconds: number): string {
   const isRegister = intent === 'REGISTER';
   const isChangeEmail = intent === 'CHANGE_EMAIL';
+  const isAdminLogin = intent === 'ADMIN_LOGIN';
   const mainTitle = isRegister
     ? 'Confirm your email address'
     : isChangeEmail
       ? 'Confirm your new email address'
-      : 'Verify your login attempt';
+      : isAdminLogin
+        ? 'Verify your administration console access'
+        : 'Verify your login attempt';
   const description = isRegister
     ? 'Use the code below to verify your email and complete your registration for Easy Point.'
     : isChangeEmail
       ? 'Use the code below to confirm and verify your new email address in the administrative panel.'
-      : 'Use the code below to verify your identity and complete your login to Easy Point.';
+      : isAdminLogin
+        ? 'Use the code below to sign in to the Easy Point administration console. If you did not try to open the console, ignore this email and your account stays as it is.'
+        : 'Use the code below to verify your identity and complete your login to Easy Point.';
 
   return `
 <!DOCTYPE html>

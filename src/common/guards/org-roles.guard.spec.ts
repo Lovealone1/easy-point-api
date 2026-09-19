@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { OrgRolesGuard } from './org-roles.guard.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Role } from '../enums/role.enum.js';
-import { GlobalRole, OrganizationStatus } from '@prisma/client';
+import { GlobalRole, OrganizationStatus, SessionScope } from '@prisma/client';
 
 // Mock getTenantId
 jest.mock('../context/tenant.context.js', () => ({
@@ -60,12 +60,63 @@ describe('OrgRolesGuard', () => {
     await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should allow access for Global Admin regardless of organization', async () => {
+  it('should allow access for a Global Admin on a console session, regardless of organization', async () => {
     reflector.getAllAndOverride.mockReturnValue([Role.OWNER]);
-    const context = createMockContext({ sub: 'user-1', role: GlobalRole.ADMIN });
+    const context = createMockContext({
+      sub: 'user-1',
+      role: GlobalRole.ADMIN,
+      scope: SessionScope.ADMIN,
+    });
 
     const result = await guard.canActivate(context);
     expect(result).toBe(true);
+  });
+
+  it('treats a Global Admin on a dashboard session as an ordinary member', async () => {
+    // The whole point of splitting the sessions: holding the ADMIN role does
+    // not let you walk into an organization from the dashboard. Reaching into
+    // someone else's organization is a console act.
+    reflector.getAllAndOverride.mockReturnValue([Role.OWNER]);
+    const context = createMockContext({
+      sub: 'user-1',
+      role: GlobalRole.ADMIN,
+      scope: SessionScope.TENANT,
+    });
+    (getTenantId as jest.Mock).mockReturnValue('org-1');
+
+    (prismaService.organization.findUnique as jest.Mock).mockResolvedValue({
+      id: 'org-1',
+      status: OrganizationStatus.ACTIVE,
+      isActive: true,
+    });
+    (prismaService.organizationUser.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('still admits a Global Admin to an organization they are actually a member of', async () => {
+    // The dashboard is not closed to them — they simply use the role they
+    // genuinely hold there, like anyone else.
+    reflector.getAllAndOverride.mockReturnValue([Role.OWNER]);
+    const context = createMockContext({
+      sub: 'user-1',
+      role: GlobalRole.ADMIN,
+      scope: SessionScope.TENANT,
+    });
+    (getTenantId as jest.Mock).mockReturnValue('org-1');
+
+    (prismaService.organization.findUnique as jest.Mock).mockResolvedValue({
+      id: 'org-1',
+      status: OrganizationStatus.ACTIVE,
+      isActive: true,
+    });
+    (prismaService.organizationUser.findUnique as jest.Mock).mockResolvedValue({
+      userId: 'user-1',
+      organizationId: 'org-1',
+      role: { name: Role.OWNER },
+    });
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
   it('should deny access if organizationId cannot be inferred', async () => {

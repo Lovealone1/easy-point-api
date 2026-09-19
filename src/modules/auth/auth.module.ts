@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigType } from '@nestjs/config';
 import appConfig from '../../common/config/config.js';
 import { AuthController } from './auth.controller.js';
+import { AdminAuthController } from './admin-auth.controller.js';
 import { DevelopmentController } from './development.controller.js';
 import { AuthService } from './auth.service.js';
 import { RedisModule } from '../../infraestructure/redis/redis.module.js';
@@ -30,6 +31,9 @@ import { InvitationsModule } from '../invitations/invitations.module.js';
   // since the route would still be reachable and listed in Swagger.
   controllers: [
     AuthController,
+    // Registered after AuthController so 'auth/admin/*' is matched by its own
+    // controller rather than swallowed by a parameterised route above it.
+    AdminAuthController,
     ...(process.env.NODE_ENV === 'development' ? [DevelopmentController] : []),
   ],
   providers: [AuthService, MailService],

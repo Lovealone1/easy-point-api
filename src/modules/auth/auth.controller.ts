@@ -6,10 +6,22 @@ import appConfig from '../../common/config/config.js';
 import { AuthService } from './auth.service.js';
 import { GenerateOtpDto } from './dto/generate-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
+import { SessionScope } from '@prisma/client';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { AllowWithoutSubscription } from '../../common/decorators/allow-without-subscription.decorator.js';
+import { RequireSessionScope } from '../../common/decorators/session-scope.decorator.js';
+import { setSessionCookies, clearSessionCookies } from './session-cookies.js';
+import { sessionCookieNames } from './session.constants.js';
 
+/**
+ * Sign-in for the tenant dashboard. The administration console has its own
+ * controller at `auth/admin` and its own cookies, session and lifetime — see
+ * AdminAuthController.
+ *
+ * Every authenticated route here is pinned to the dashboard scope, so a
+ * console token cannot drive dashboard session management.
+ */
 @Controller('auth')
 @AllowWithoutSubscription()
 export class AuthController {
@@ -19,26 +31,14 @@ export class AuthController {
   ) { }
 
   private setAuthCookies(response: Response, accessToken: string, refreshToken: string) {
-    const isProduction = this.config.app.env === 'production';
-
-    response.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-
-    response.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      maxAge: this.config.jwt.refreshExpiresInMs,
+    setSessionCookies(response, SessionScope.TENANT, accessToken, refreshToken, {
+      secure: this.config.app.env === 'production',
+      refreshMaxAgeMs: this.config.jwt.refreshExpiresInMs,
     });
   }
 
   private clearAuthCookies(response: Response) {
-    response.clearCookie('access_token');
-    response.clearCookie('refresh_token');
+    clearSessionCookies(response, SessionScope.TENANT);
   }
 
   @Post('otp')
@@ -64,7 +64,7 @@ export class AuthController {
       userAgent: request.userAgent || 'unknown',
     };
 
-    const result = await this.authService.verifyOtpWithMetadata(payload, metadata);
+    const result = await this.authService.verifyOtpWithMetadata(payload, metadata, SessionScope.TENANT);
     const { accessToken, refreshToken, ...rest } = result;
 
     this.setAuthCookies(response, accessToken, refreshToken);
@@ -79,13 +79,13 @@ export class AuthController {
   @ApiOkResponse({ description: 'New Access Token and Refresh Token issued.' })
   @ApiTooManyRequestsResponse({ description: 'Rate limit strictly exceeded.' })
   async refreshToken(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
-    const refreshTokenString = request.cookies?.refresh_token;
+    const refreshTokenString = request.cookies?.[sessionCookieNames(SessionScope.TENANT).refresh];
 
     if (!refreshTokenString) {
       throw new UnauthorizedException('Refresh token missing from cookies');
     }
 
-    const result = await this.authService.refreshToken(refreshTokenString);
+    const result = await this.authService.refreshToken(refreshTokenString, SessionScope.TENANT);
     const { accessToken, refreshToken, ...rest } = result;
 
     this.setAuthCookies(response, accessToken, refreshToken);
@@ -95,6 +95,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @RequireSessionScope(SessionScope.TENANT)
   @ApiBearerAuth()
   @ApiTags('Auth')
   @ApiOperation({ summary: 'Get current user profile', description: 'Returns the logged-in user profile along with joined organizations and visual branding configs.' })
@@ -105,15 +106,17 @@ export class AuthController {
 
   @Get('sessions')
   @UseGuards(JwtAuthGuard)
+  @RequireSessionScope(SessionScope.TENANT)
   @ApiBearerAuth()
   @ApiTags('Auth')
   @ApiOperation({ summary: 'List Active Sessions', description: 'Returns a list of all active sessions/devices for the authenticated user.' })
   async getSessions(@CurrentUser('sub') userId: string) {
-    return this.authService.getSessions(userId);
+    return this.authService.getSessions(userId, SessionScope.TENANT);
   }
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
+  @RequireSessionScope(SessionScope.TENANT)
   @ApiBearerAuth()
   @ApiTags('Auth')
   @ApiOperation({ summary: 'Logout', description: 'Invalidates the current session token.' })
@@ -124,15 +127,16 @@ export class AuthController {
     @Req() request: Request
   ) {
     this.clearAuthCookies(response);
-    const refreshToken = request.cookies?.refresh_token;
-    return this.authService.logout(userId, sessionId, refreshToken);
+    const refreshToken = request.cookies?.[sessionCookieNames(SessionScope.TENANT).refresh];
+    return this.authService.logout(userId, sessionId, SessionScope.TENANT, refreshToken);
   }
 
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
+  @RequireSessionScope(SessionScope.TENANT)
   @ApiBearerAuth()
   @ApiTags('Auth')
-  @ApiOperation({ summary: 'Logout from all devices', description: 'Invalidates all active session tokens for the current user.' })
+  @ApiOperation({ summary: 'Logout from all devices', description: 'Invalidates every active session for the current user, in the dashboard AND the administration console. Deliberately the one action that crosses both applications.' })
   @ApiOkResponse({ description: 'Logged out from all devices successfully' })
   async logoutAll(@CurrentUser('sub') userId: string, @Res({ passthrough: true }) response: Response) {
     this.clearAuthCookies(response);
@@ -141,12 +145,13 @@ export class AuthController {
 
   @Delete('sessions/:sid')
   @UseGuards(JwtAuthGuard)
+  @RequireSessionScope(SessionScope.TENANT)
   @ApiBearerAuth()
   @ApiTags('Auth')
   @ApiOperation({ summary: 'Kill Session', description: 'Terminates a specific active session by its ID.' })
   @ApiOkResponse({ description: 'Session terminated successfully' })
   @ApiNotFoundResponse({ description: 'The session ID provided was not found.' })
   async killSession(@CurrentUser('sub') userId: string, @Param('sid') sessionIdToKill: string) {
-    return this.authService.killSession(userId, sessionIdToKill);
+    return this.authService.killSession(userId, sessionIdToKill, SessionScope.TENANT);
   }
 }

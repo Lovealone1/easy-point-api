@@ -1119,17 +1119,31 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Which of the two applications a session belongs to. Easy Point serves the
+/// tenant dashboard and the administration console from one domain and one
+/// deployment, but they never share a session: each scope has its own cookie
+/// pair, its own `sid` in Redis and its own refresh-token rows, so signing out
+/// of one leaves the other untouched.
+enum SessionScope {
+  TENANT
+  ADMIN
+}
+
 model RefreshToken {
-  id        String   @id @default(uuid())
-  tokenHash String   @unique
+  id        String       @id @default(uuid())
+  tokenHash String       @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Pins the token to the application it was issued for. A refresh token
+  /// minted for the console cannot be redeemed for a dashboard session.
+  scope     SessionScope @default(TENANT)
   userAgent String?
   ipAddress String?
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 
   @@index([userId])
+  @@index([userId, scope])
   @@map("refresh_tokens")
 }
 
