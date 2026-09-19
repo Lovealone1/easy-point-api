@@ -58,3 +58,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .agents
 /generated/prisma
 .pnpm-DS_Store
+
+# Cloud SQL server CA (downloaded per instance, not a secret but not source)
+/certs/*
+!/certs/.gitkeep

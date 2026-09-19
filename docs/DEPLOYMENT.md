@@ -233,3 +233,84 @@ Prisma migrations are additive/forward-only by default — if a deploy needs to 
 - [ ] Las tres verificaciones de RLS de §4b pasan (`rolbypassrls = f`, la app no es owner, y un `SELECT` sin `WHERE` devuelve 0 filas sin tenant fijado).
 - [ ] `RATE_LIMIT_ENABLED` — decide on/off deliberately (see the note in `docs/SECURITY.md`); don't leave it at whatever the default happened to be.
 - [ ] DNS, provider snapshots, and `ufw status` all confirmed.
+
+---
+
+## 9. Cloud SQL (GCP) — connectivity and TLS
+
+This section applies only to `compose.cloudsql.yaml`, where Postgres is a Cloud
+SQL instance instead of a container. Sections 1-8 assume the self-hosted stack.
+
+### Reaching the instance
+
+An instance published through Private Service Connect exposes a `dnsName` like
+`<uid>.<uid>.<region>.sql.goog`, but **that name does not resolve until the PSC
+endpoint and its managed DNS zone exist in the consumer VPC**. Cloud SQL reports
+the name in `gcloud sql instances describe` whether or not it was provisioned,
+so the name being present proves nothing.
+
+Check resolution from the VM, not from a container:
+
+```bash
+resolvectl query <dnsName>
+```
+
+`Name '...' not found` means the DNS side was never set up. Either enable
+per-instance DNS automation on the instance, or point `DATABASE_URL` /
+`DIRECT_URL` at the PSC endpoint's private IP. The IP works immediately but
+changes if the endpoint is recreated, so the name is the better long-term
+target.
+
+If the VM resolves the name but the container does not, that is a different
+problem: when the host runs systemd-resolved, `/etc/resolv.conf` lists
+`127.0.0.53`, which Docker cannot forward from inside a container, so it falls
+back to public DNS that knows nothing about `.sql.goog`. Fix it with
+`{"dns": ["169.254.169.254"]}` in `/etc/docker/daemon.json` — the GCP metadata
+resolver, which answers both private zones and public names.
+
+### TLS
+
+Cloud SQL signs its server certificate with a per-instance CA that is not in
+the image's trust store. Download `server-ca.pem` from the instance's
+**Connections > Security** tab into `./certs` on the VM; `compose.cloudsql.yaml`
+mounts that directory at `/etc/ssl/cloudsql`.
+
+The two URLs take different parameters because different clients parse them:
+
+| Variable | Consumed by | Suffix |
+| --- | --- | --- |
+| `DATABASE_URL` | runtime, `PrismaPg` -> node-postgres | `?uselibpqcompat=true&sslmode=verify-ca&sslrootcert=/etc/ssl/cloudsql/server-ca.pem` |
+| `DIRECT_URL` | Prisma CLI (migrations), Rust engine | `?sslmode=require` |
+
+`uselibpqcompat=true` is required, not cosmetic: without it node-postgres
+promotes `verify-ca` to `verify-full`, which checks the hostname against a
+certificate issued for the instance connection name and fails when connecting
+by IP. Omitting the CA entirely fails with
+`UNABLE_TO_VERIFY_LEAF_SIGNATURE`.
+
+Quote both values in `.env`. Unquoted, Compose truncates the URL at the first
+`&`, and a `$` in a password is interpolated away unless written `$$`.
+
+### Verifying
+
+`docker compose ps` is not evidence: the image's `HEALTHCHECK` calls
+`/api/v1/health`, which is liveness only and returns `ok` with the database
+unreachable. Use the readiness endpoint, which actually queries both
+dependencies:
+
+```bash
+docker compose -f compose.cloudsql.yaml exec easy-point-api   node -e "fetch('http://127.0.0.1:3001/api/v1/health/ready').then(r=>r.text()).then(console.log)"
+```
+
+To see the underlying driver error rather than the wrapped 503:
+
+```bash
+docker compose -f compose.cloudsql.yaml exec easy-point-api node -e "
+const {Client}=require('pg');
+const c=new Client({connectionString:process.env.DATABASE_URL});
+c.connect().then(()=>c.query('select 1')).then(()=>console.log('OK'))
+ .catch(e=>console.log('FAIL', e.code||'', e.message)).finally(()=>c.end());"
+```
+
+`ENOTFOUND` is DNS, `ETIMEDOUT` is routing or firewall, `28P01` is credentials,
+`UNABLE_TO_VERIFY_LEAF_SIGNATURE` is the CA.
