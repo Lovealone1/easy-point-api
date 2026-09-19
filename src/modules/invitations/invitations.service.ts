@@ -69,6 +69,31 @@ export class InvitationsService {
       );
     }
 
+    // Roles are per-organization rows and the invitation holds a relation to
+    // one, so a name with no row cannot be connected. Resolve it up front: a
+    // typo or a role this organization never had belongs in a 400, not in a
+    // failed nested connect surfacing as a 500.
+    const roleData = await this.prismaService.role.findUnique({
+      where: {
+        organizationId_name: {
+          organizationId,
+          name: role,
+        },
+      },
+    });
+
+    if (!roleData) {
+      const available = await this.prismaService.role.findMany({
+        where: { organizationId },
+        select: { name: true },
+      });
+      throw new BadRequestException(
+        `Role '${role}' does not exist in this organization. Available roles: ${available
+          .map((r) => r.name)
+          .join(', ')}`,
+      );
+    }
+
     const token = crypto.randomUUID();
     const expiresAt = new Date(
       Date.now() + INVITATION_TTL_HOURS * 60 * 60 * 1000,
@@ -82,22 +107,11 @@ export class InvitationsService {
       expiresAt,
     });
 
-
-
     const organization = await this.prismaService.organization.findUnique({
       where: { id: organizationId },
     });
 
-    const roleData = await this.prismaService.role.findUnique({
-      where: {
-        organizationId_name: {
-          organizationId,
-          name: role,
-        },
-      },
-    });
-
-    if (organization && roleData) {
+    if (organization) {
       const invitationLink = `${this.config.app.frontendUrl}/auth/invitation?token=${token}`;
       const logoUrl = EMAIL_LOGO_SRC;
       const htmlContent = getInvitationEmailTemplate(

@@ -12,15 +12,23 @@ export class InvitationsRepository {
   constructor(private readonly prisma: PrismaService) { }
 
   async create(data: { email: string, token: string, role: string, organizationId: string, expiresAt: Date }): Promise<Invitation> {
-    return this.prisma.invitation.create({
-      data: {
-        email: data.email,
-        token: data.token,
-        expiresAt: data.expiresAt,
-        organization: { connect: { id: data.organizationId } },
-        role: { connect: { organizationId_name: { organizationId: data.organizationId, name: data.role } } }
-      }
-    });
+    // `Invitation` is tenant-exempt, so this statement would otherwise run with
+    // no tenant published to Postgres. The nested connect resolves a `roles`
+    // row, and `roles` IS under RLS — with no `app.current_org_id` set the
+    // policy hides every role and Prisma reports the connect target as missing.
+    // Running inside a tenant transaction publishes the setting for both
+    // statements.
+    return this.prisma.$tenantTransaction((tx) =>
+      tx.invitation.create({
+        data: {
+          email: data.email,
+          token: data.token,
+          expiresAt: data.expiresAt,
+          organization: { connect: { id: data.organizationId } },
+          role: { connect: { organizationId_name: { organizationId: data.organizationId, name: data.role } } }
+        }
+      }),
+    );
   }
 
   async findByToken(token: string): Promise<InvitationWithOrg | null> {

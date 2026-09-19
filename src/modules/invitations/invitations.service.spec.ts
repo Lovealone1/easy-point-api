@@ -48,9 +48,11 @@ describe('InvitationsService', () => {
           useValue: {
             user: { findUnique: jest.fn() },
             organization: { findUnique: jest.fn() },
-            role: { findUnique: jest.fn() },
-            organizationUser: { create: jest.fn() },
-            invitation: { update: jest.fn() },
+            role: { findUnique: jest.fn(), findMany: jest.fn() },
+            organizationUser: { create: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+            invitation: { update: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+            // Read by assertUserLimitNotExceeded before the invitation is built.
+            subscription: { findFirst: jest.fn().mockResolvedValue(null) },
             $transaction: jest.fn(),
           },
         },
@@ -90,6 +92,22 @@ describe('InvitationsService', () => {
       const result = await service.createInvitation('org-id', { email: 'test@test.com', role: Role.ADMINISTRATOR });
       expect(result.invitationId).toBe('inv-id');
       expect(invitationsRepository.create).toHaveBeenCalled();
+    });
+
+    it('rejects a role the organization does not have, naming the ones it does', async () => {
+      invitationsRepository.findByEmailAndOrg.mockResolvedValueOnce(null);
+      prismaService.role.findUnique.mockResolvedValueOnce(null);
+      prismaService.role.findMany.mockResolvedValueOnce([
+        { name: 'OWNER' },
+        { name: 'ADMINISTRATOR' },
+      ]);
+
+      await expect(
+        service.createInvitation('org-id', { email: 'test@test.com', role: Role.COLLABORATOR }),
+      ).rejects.toThrow(/COLLABORATOR.*OWNER, ADMINISTRATOR/s);
+
+      // The row must not be written when the role cannot be connected.
+      expect(invitationsRepository.create).not.toHaveBeenCalled();
     });
   });
 
