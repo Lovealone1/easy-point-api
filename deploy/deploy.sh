@@ -19,21 +19,44 @@ readonly HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 
 readonly TAG="${1:?usage: deploy.sh <image-tag>}"
 
-# Every compose invocation needs the same file stack. Getting this wrong is
-# how a deploy accidentally runs the dev configuration in production.
-readonly COMPOSE=(
-  docker compose
-  -f "${DEPLOY_DIR}/compose.yaml"
-  -f "${DEPLOY_DIR}/compose.prod.yaml"
-  -f "${DEPLOY_DIR}/compose.registry.yaml"
-  --project-directory "${DEPLOY_DIR}"
-)
-
 export API_IMAGE="${IMAGE_REPO}:${TAG}"
 export MIGRATE_IMAGE="${IMAGE_REPO}:migrate-${TAG}"
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 fail() { printf '\n\033[1;31m!!!\033[0m %s\n' "$*" >&2; exit 1; }
+
+# ── Which topology this server runs ─────────────────────────────────────────
+# There is no default, and that is the point. The two stacks put the API on
+# different databases, and picking wrong is not a crash you would notice:
+# compose.yaml sets DATABASE_URL to a local `postgres` service, so a Cloud SQL
+# server deployed with the self-hosted stack would come up healthy, having
+# just migrated an empty database nobody asked for. Refusing to start beats
+# that, every time.
+readonly DEPLOY_STACK="${DEPLOY_STACK:?DEPLOY_STACK must be 'cloudsql' or 'selfhosted' - see docs/CI_CD.md}"
+
+case "${DEPLOY_STACK}" in
+  cloudsql)
+    # Postgres lives in Cloud SQL. compose.cloudsql.yaml is standalone by
+    # design — its own header says not to combine it with the pair below,
+    # which would override DATABASE_URL out from under it.
+    base_compose=(-f "${DEPLOY_DIR}/compose.cloudsql.yaml")
+    ;;
+  selfhosted)
+    base_compose=(-f "${DEPLOY_DIR}/compose.yaml" -f "${DEPLOY_DIR}/compose.prod.yaml")
+    ;;
+  *)
+    fail "DEPLOY_STACK must be 'cloudsql' or 'selfhosted', got '${DEPLOY_STACK}'"
+    ;;
+esac
+
+# compose.registry.yaml layers onto either base: it only swaps `build` for
+# `image` on easy-point-api and migrate, and both stacks name those the same.
+readonly COMPOSE=(
+  docker compose
+  "${base_compose[@]}"
+  -f "${DEPLOY_DIR}/compose.registry.yaml"
+  --project-directory "${DEPLOY_DIR}"
+)
 
 cd "${DEPLOY_DIR}"
 
@@ -53,7 +76,7 @@ PREVIOUS_IMAGE="$(
 readonly PREVIOUS_IMAGE
 
 if [[ -n "${PREVIOUS_IMAGE}" ]]; then
-  log "Current API image: ${PREVIOUS_IMAGE}"
+  log "Stack ${DEPLOY_STACK}, current API image: ${PREVIOUS_IMAGE}"
 else
   log "No API container running — this is a first deploy, rollback is unavailable"
 fi

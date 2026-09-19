@@ -141,7 +141,7 @@ jobs:
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/easy-point-api' }}
         run: |
           tar czf bundle.tar.gz \
-            compose.yaml compose.prod.yaml compose.registry.yaml \
+            compose.yaml compose.prod.yaml compose.cloudsql.yaml compose.registry.yaml \
             Caddyfile docker deploy
           scp -i ~/.ssh/id_deploy bundle.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/bundle.tar.gz"
           ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -164,9 +164,13 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/easy-point-api' }}
+          # No fallback on purpose: an empty value makes deploy.sh refuse to
+          # run, which is the right outcome for a server nobody has said which
+          # database it talks to.
+          DEPLOY_STACK: ${{ vars.DEPLOY_STACK }}
         run: |
           ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
-            "DEPLOY_DIR='$DEPLOY_DIR' IMAGE_REPO='${{ steps.target.outputs.repo }}' bash '$DEPLOY_DIR/deploy/deploy.sh' '${{ steps.target.outputs.tag }}'"
+            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_STACK='$DEPLOY_STACK' IMAGE_REPO='${{ steps.target.outputs.repo }}' bash '$DEPLOY_DIR/deploy/deploy.sh' '${{ steps.target.outputs.tag }}'"
 
       # Leaving the runner's credential in the server's docker config would
       # keep a token on disk that nothing on the box needs between deploys.
