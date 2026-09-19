@@ -52,8 +52,24 @@ export function userSessionsKey(scope: SessionScope, userId: string): string {
  * separate act from signing into the dashboard, so the two flows get their own
  * cooldown and hourly budget instead of locking each other out.
  */
-export function otpChannel(scope: SessionScope): string {
+function otpChannel(scope: SessionScope): string {
   return scope === SessionScope.ADMIN ? 'admin' : 'tenant';
+}
+
+/** Blocks a second code from being sent within the cooldown window. */
+export function otpCooldownKey(scope: SessionScope, email: string): string {
+  return `otp:cooldown:${otpChannel(scope)}:${email}`;
+}
+
+/**
+ * The hourly budget of codes for one address.
+ *
+ * Built here rather than inline because it is both charged (on issuance) and
+ * refunded (on a correct code), and the two must agree on the key down to the
+ * channel or a refund would silently miss.
+ */
+export function otpHourlyCountKey(scope: SessionScope, email: string): string {
+  return `otp:hourly_count:${otpChannel(scope)}:${email}`;
 }
 
 /**

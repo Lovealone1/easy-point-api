@@ -71,12 +71,43 @@ export class RedisCacheService {
 
   async incr(key: string, ttlSeconds?: number): Promise<number> {
     const newValue = await this.redisClient.incr(key);
-    
+
     // If it's a new key and TTL is provided, set the expiration
     if (newValue === 1 && ttlSeconds && ttlSeconds > 0) {
       await this.redisClient.expire(key, ttlSeconds);
     }
-    
+
+    return newValue;
+  }
+
+  /**
+   * Gives one back to a counter created by `incr`, without ever creating it.
+   *
+   * Plain DECR is wrong for refunding a quota: on a missing key Redis creates
+   * it at -1 with no expiry, so a refund arriving after the window closed
+   * would leave a counter that never expires and reads as "under the limit"
+   * forever. DECR does preserve an existing TTL, which is what we want — a
+   * refund must not extend the window it belongs to.
+   *
+   * Returns the new value, or null when there was nothing to give back.
+   */
+  async decrIfPresent(key: string): Promise<number | null> {
+    const current = await this.redisClient.get(key);
+
+    if (current === null) {
+      return null;
+    }
+
+    const newValue = await this.redisClient.decr(key);
+
+    // Either the counter is spent, or it expired between the read and the
+    // write and DECR just recreated it at -1. Deleting covers both: a spent
+    // counter carries no information, and the phantom key has no TTL.
+    if (newValue <= 0) {
+      await this.redisClient.del(key);
+      return 0;
+    }
+
     return newValue;
   }
 }

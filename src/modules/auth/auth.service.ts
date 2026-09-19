@@ -12,7 +12,8 @@ import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { AuthIntent } from './enums/auth-intent.enum.js';
 import {
   ADMIN_ACCESS_DENIED,
-  otpChannel,
+  otpCooldownKey,
+  otpHourlyCountKey,
   sessionMetadataKey,
   userSessionsKey,
 } from './session.constants.js';
@@ -83,9 +84,9 @@ export class AuthService {
     if (this.config.app.env === 'production') {
       // Namespaced per application: opening the console is a separate act from
       // opening the dashboard, so the two flows must not lock each other out.
-      const channel = otpChannel(this.scopeForIntent(intent));
-      const cooldownKey = `otp:cooldown:${channel}:${email}`;
-      const hourlyKey = `otp:hourly_count:${channel}:${email}`;
+      const scope = this.scopeForIntent(intent);
+      const cooldownKey = otpCooldownKey(scope, email);
+      const hourlyKey = otpHourlyCountKey(scope, email);
 
       const [hasCooldown, hourlyRequests] = await Promise.all([
         this.redisCacheService.get<string>(cooldownKey),
@@ -210,10 +211,22 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired OTP code');
     }
 
-    // 2. Consume OTP and reset attempts
+    // 2. Consume OTP, reset attempts, and refund the request that got us here.
+    //
+    // The hourly budget exists to stop someone mail-bombing an address they do
+    // not control. A correct code proves the opposite, so charging for it is
+    // friction with nothing bought: three ordinary sign-ins in an hour would
+    // otherwise lock the account out of requesting a fourth code.
+    //
+    // Only the successful request is given back, not the whole budget — codes
+    // that were requested and never used still count, which is exactly the
+    // pattern the limit is watching for.
     await Promise.all([
       this.redisCacheService.delete(cacheKey),
       this.redisCacheService.delete(attemptsKey),
+      this.redisCacheService.decrIfPresent(
+        otpHourlyCountKey(this.scopeForIntent(intent), email),
+      ),
     ]);
 
     // 3. Database operations (Prisma)

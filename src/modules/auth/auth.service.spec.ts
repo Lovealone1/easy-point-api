@@ -53,6 +53,7 @@ describe('AuthService', () => {
             sadd: jest.fn(),
             srem: jest.fn(),
             mget: jest.fn(),
+            decrIfPresent: jest.fn(),
           },
         },
         {
@@ -365,6 +366,70 @@ describe('AuthService', () => {
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         expect.objectContaining({ scope: SessionScope.ADMIN, sub: 'admin-1' }),
       );
+    });
+  });
+
+  describe('hourly code budget', () => {
+    const metadata = { ip: '127.0.0.1', userAgent: 'agent' };
+
+    it('gives back the request that produced a correct code', async () => {
+      // Three ordinary sign-ins in an hour used to lock the account out of
+      // requesting a fourth code. The budget is there to stop someone
+      // mail-bombing an address they do not control, and a correct code
+      // proves the opposite.
+      redisCacheService.get.mockResolvedValueOnce(0); // attempts
+      redisCacheService.get.mockResolvedValueOnce('hashed-otp'); // cached otp
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@test.com',
+        isActive: true,
+        globalRole: GlobalRole.USER,
+      });
+
+      await service.verifyOtp({
+        email: 'test@test.com',
+        intent: AuthIntent.LOGIN,
+        otp: '123456',
+      });
+
+      expect(redisCacheService.decrIfPresent).toHaveBeenCalledWith(
+        'otp:hourly_count:tenant:test@test.com',
+      );
+    });
+
+    it('refunds the console budget, not the dashboard one', async () => {
+      redisCacheService.get.mockResolvedValueOnce(0);
+      redisCacheService.get.mockResolvedValueOnce('hashed-otp');
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        email: 'admin@test.com',
+        isActive: true,
+        globalRole: GlobalRole.ADMIN,
+      });
+
+      await service.verifyOtpWithMetadata(
+        { email: 'admin@test.com', otp: '123456', intent: AuthIntent.ADMIN_LOGIN },
+        metadata,
+        SessionScope.ADMIN,
+      );
+
+      expect(redisCacheService.decrIfPresent).toHaveBeenCalledWith(
+        'otp:hourly_count:admin:admin@test.com',
+      );
+    });
+
+    it('charges for a code that is requested and never used', async () => {
+      // A wrong code refunds nothing: requesting codes that go unused is
+      // exactly the pattern the budget is watching for.
+      redisCacheService.get.mockResolvedValueOnce(0);
+      redisCacheService.get.mockResolvedValueOnce('hashed-otp');
+      (argon2.verify as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(
+        service.verifyOtp({ email: 'test@test.com', intent: AuthIntent.LOGIN, otp: '000000' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(redisCacheService.decrIfPresent).not.toHaveBeenCalled();
     });
   });
 

@@ -89,6 +89,25 @@ Without that restriction, anyone could ask the public route to email an
 anything — verification still demands the ADMIN role — but it would hand a
 stranger a convincing phishing lure sent over our own SMTP.
 
+## The hourly code budget is refunded on success
+
+Each address may request 3 codes per hour, per application
+(`otp:hourly_count:<channel>:<email>`), with a 60-second cooldown between
+them. A **correct** code gives its own request back.
+
+The budget exists to stop someone mail-bombing an address they do not
+control. Entering the right code proves the opposite, so charging for it buys
+nothing and costs real usability: three ordinary sign-ins in an hour would
+otherwise lock the account out of requesting a fourth code.
+
+Only the successful request is refunded, never the whole budget. Codes that
+are requested and never used keep counting, which is exactly the pattern the
+limit is watching for. The 60-second cooldown is untouched either way — it
+throttles outbound mail rather than rationing sign-ins.
+
+Refunds go through `RedisCacheService.decrIfPresent`, which never creates the
+key and never resets its expiry; a plain `DECR` would do both.
+
 ## Adding a console endpoint
 
 Declare `@Roles(GlobalRole.ADMIN)` as before. Nothing else is needed — the
