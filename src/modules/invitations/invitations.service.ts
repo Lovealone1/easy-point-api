@@ -317,18 +317,20 @@ export class InvitationsService {
       });
     }
 
-    const invitations = await this.prismaService.invitation.findMany({
-      where: { status: InvitationStatus.PENDING },
-      select: {
-        id: true,
-        email: true,
-        token: true,
-        expiresAt: true,
-        organization: { select: { name: true } },
-        role: { select: { name: true } }
-      },
-      orderBy: { expiresAt: 'desc' },
-    });
+    const invitations = await this.prismaService.$systemTransaction((tx) =>
+      tx.invitation.findMany({
+        where: { status: InvitationStatus.PENDING },
+        select: {
+          id: true,
+          email: true,
+          token: true,
+          expiresAt: true,
+          organization: { select: { name: true } },
+          role: { select: { name: true } }
+        },
+        orderBy: { expiresAt: 'desc' },
+      }),
+    );
 
     this.logger.log(`[DEV ONLY] Showing ${invitations.length} pending invitations in console:`);
     console.table(
@@ -395,17 +397,22 @@ export class InvitationsService {
       },
     });
 
-    return this.prismaService.invitation.findMany({
-      include: {
-        organization: {
-          select: { id: true, name: true },
+    // Cross-tenant by definition: the global admin dashboard lists every
+    // organization's invitations. The included `role` is RLS-protected, so
+    // without the bypass every row would come back with `role: null`.
+    return this.prismaService.$systemTransaction((tx) =>
+      tx.invitation.findMany({
+        include: {
+          organization: {
+            select: { id: true, name: true },
+          },
+          role: {
+            select: { name: true },
+          },
         },
-        role: {
-          select: { name: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
   }
 
   // ────────────────────────────────────────────────────────────────────────────
