@@ -27,6 +27,9 @@ describe('email rendering', () => {
     expect(html).toContain(`src="${EMAIL_LOGO_SRC}"`);
     expect(html).toContain(`&copy; ${new Date().getFullYear()}`);
     expect(html).not.toContain('${');
+    // Inline, not just in the <style> block: Gmail and Outlook override anchor
+    // colors with their own blue and ignore the stylesheet rule.
+    expect(html).toMatch(/<a[^>]*class="btn"[^>]*style="[^"]*color: #ffffff/);
   });
 
   it('renders subscription dates, names and links in both lifecycle emails', () => {

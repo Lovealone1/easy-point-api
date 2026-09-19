@@ -160,7 +160,7 @@ export function getInvitationEmailTemplate(
         </p>
         
         <div class="btn-container">
-          <a href="${escapeHtml(invitationLink)}" class="btn">Accept Invitation</a>
+          <a href="${escapeHtml(invitationLink)}" class="btn" style="color: #ffffff; text-decoration: none;"><span style="color: #ffffff;">Accept Invitation</span></a>
         </div>
 
         <div class="link-container">
