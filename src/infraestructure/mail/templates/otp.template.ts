@@ -1,4 +1,6 @@
-export function getOtpEmailTemplate(otp: string, intent: string, logoUrl: string): string {
+import { escapeHtml } from './email.utils.js';
+
+export function getOtpEmailTemplate(otp: string, intent: string, logoUrl: string, ttlSeconds: number): string {
   const isRegister = intent === 'REGISTER';
   const isChangeEmail = intent === 'CHANGE_EMAIL';
   const mainTitle = isRegister
@@ -153,24 +155,24 @@ export function getOtpEmailTemplate(otp: string, intent: string, logoUrl: string
   <div class="wrapper">
     <div class="main-container">
       <div class="header">
-        <img class="logo" src="\${logoUrl}" alt="Easy Point Logo" />
+        <img class="logo" src="${escapeHtml(logoUrl)}" alt="Easy Point Logo" />
         <h1>Easy Point Auth</h1>
         <p>Security OTP</p>
       </div>
       <div class="content">
         <div class="badge">Verification</div>
-        <h2>\${mainTitle}</h2>
-        <p class="description">\${description}</p>
+        <h2>${mainTitle}</h2>
+        <p class="description">${description}</p>
         
         <div class="code-container">
           <p class="label">VERIFICATION CODE</p>
-          <p class="code">\${otp}</p>
-          <p class="expires">Expires in 15 minutes</p>
+          <p class="code">${escapeHtml(otp)}</p>
+          <p class="expires">Expires in ${ttlSeconds / 60} minutes from the time you requested the code</p>
         </div>
       </div>
       <div class="footer">
         <p>If you didn't request this code, you can safely ignore this email.</p>
-        <p class="copyright">&copy; \${new Date().getFullYear()} Easy Point. All rights reserved.</p>
+        <p class="copyright">&copy; ${new Date().getFullYear()} Easy Point. All rights reserved.</p>
       </div>
     </div>
   </div>

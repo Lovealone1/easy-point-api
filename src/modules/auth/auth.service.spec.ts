@@ -93,6 +93,27 @@ describe('AuthService', () => {
   });
 
   describe('generateOtp', () => {
+    it.each(['production', 'development'])('uses the Redis TTL in the rendered %s email', async (env) => {
+      (service as any).config.app.env = env;
+      redisCacheService.get.mockResolvedValue(null);
+      const sendMail = (service as any).mailService.sendMail as jest.Mock;
+      sendMail.mockResolvedValue(true);
+      await service.generateOtp({ email: 'test@test.com', intent: AuthIntent.LOGIN });
+      const ttl = env === 'production' ? 120 : 900;
+      expect(redisCacheService.set).toHaveBeenCalledWith('otp:LOGIN:test@test.com', 'hashed-otp', ttl);
+      const html = sendMail.mock.calls[0][2];
+      expect(html).toContain(`Expires in ${ttl / 60} minutes`);
+      expect(html).toMatch(/<p class="code">\d{6}<\/p>/);
+      expect(html).toContain('cid:easypoint-logo@easy-point');
+      expect(html).not.toContain('${');
+    });
+
+    it('does not claim the OTP was sent when SMTP fails', async () => {
+      redisCacheService.get.mockResolvedValue(null);
+      (service as any).mailService.sendMail.mockRejectedValue(new Error('SMTP unavailable'));
+      await expect(service.generateOtp({ email: 'test@test.com', intent: AuthIntent.LOGIN })).rejects.toThrow('SMTP unavailable');
+    });
+
     it('should generate, hash and store OTP in redis', async () => {
       redisCacheService.get.mockResolvedValueOnce(null); // No cooldown
       await service.generateOtp({ email: 'test@test.com', intent: AuthIntent.LOGIN }, true);

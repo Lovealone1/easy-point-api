@@ -1,3 +1,5 @@
+import { escapeHtml } from './email.utils.js';
+
 export interface SubscriptionRenewalParams {
   organizationName: string;
   planName: string;
@@ -198,7 +200,7 @@ export function getSubscriptionRenewalReminderTemplate(params: SubscriptionRenew
   <div class="wrapper">
     <div class="main-container">
       <div class="header">
-        <img class="logo" src="${logoUrl}" alt="Easy Point Logo" />
+        <img class="logo" src="${escapeHtml(logoUrl)}" alt="Easy Point Logo" />
         <h1>Easy Point</h1>
         <p>Subscription Renewal</p>
       </div>
@@ -206,7 +208,7 @@ export function getSubscriptionRenewalReminderTemplate(params: SubscriptionRenew
         <div class="badge">${badgeText}</div>
         <h2>Renewal Reminder</h2>
         <p class="description">
-          The subscription to the plan <strong>${planName}</strong> for organization <strong>${organizationName}</strong> will expire/renew on <strong>${renewalDate}</strong>.
+          The subscription to the plan <strong>${escapeHtml(planName)}</strong> for organization <strong>${escapeHtml(organizationName)}</strong> will expire/renew on <strong>${escapeHtml(renewalDate)}</strong>.
         </p>
         
         <div class="counter-container">
@@ -215,12 +217,12 @@ export function getSubscriptionRenewalReminderTemplate(params: SubscriptionRenew
         </div>
 
         <div class="btn-container">
-          <a href="${renewalLink}" class="btn">Manage Subscription</a>
+          <a href="${escapeHtml(renewalLink)}" class="btn">Manage Subscription</a>
         </div>
 
         <div class="link-container">
           <p>Or copy and paste this link into your browser:</p>
-          <a href="${renewalLink}">${renewalLink}</a>
+          <a href="${escapeHtml(renewalLink)}">${escapeHtml(renewalLink)}</a>
         </div>
       </div>
       <div class="footer">
@@ -378,7 +380,7 @@ export function getSubscriptionCancelledTemplate(params: SubscriptionCancelledPa
   <div class="wrapper">
     <div class="main-container">
       <div class="header">
-        <img class="logo" src="${logoUrl}" alt="Easy Point Logo" />
+        <img class="logo" src="${escapeHtml(logoUrl)}" alt="Easy Point Logo" />
         <h1>Easy Point</h1>
         <p>Subscription Cancelled</p>
       </div>
@@ -386,7 +388,7 @@ export function getSubscriptionCancelledTemplate(params: SubscriptionCancelledPa
         <div class="badge">Cancelled</div>
         <h2>Subscription Deactivated</h2>
         <p class="description">
-          The subscription to the plan <strong>${planName}</strong> for organization <strong>${organizationName}</strong> was cancelled on <strong>${cancelledAt}</strong>. You have lost access to the premium features of your administrative panel.
+          The subscription to the plan <strong>${escapeHtml(planName)}</strong> for organization <strong>${escapeHtml(organizationName)}</strong> was cancelled on <strong>${escapeHtml(cancelledAt)}</strong>. You have lost access to the premium features of your administrative panel.
         </p>
         
         <p class="description" style="font-size: 14px; margin-top: -16px; margin-bottom: 32px; color: #6b1a93;">
@@ -394,12 +396,12 @@ export function getSubscriptionCancelledTemplate(params: SubscriptionCancelledPa
         </p>
 
         <div class="btn-container">
-          <a href="${reactivateLink}" class="btn">Reactivate Subscription</a>
+          <a href="${escapeHtml(reactivateLink)}" class="btn">Reactivate Subscription</a>
         </div>
 
         <div class="link-container">
           <p>Or copy and paste this link into your browser:</p>
-          <a href="${reactivateLink}">${reactivateLink}</a>
+          <a href="${escapeHtml(reactivateLink)}">${escapeHtml(reactivateLink)}</a>
         </div>
       </div>
       <div class="footer">
