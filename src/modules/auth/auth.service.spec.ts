@@ -7,6 +7,7 @@ import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { AuditService } from '../../infraestructure/audit/audit.service.js';
 import { StorageService } from '../../infraestructure/storage/storage.service.js';
+import { SessionsService } from '../sessions/sessions.service.js';
 import appConfig from '../../common/config/config.js';
 import * as argon2 from 'argon2';
 import { AuthIntent } from './enums/auth-intent.enum.js';
@@ -29,6 +30,10 @@ describe('AuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        // The real thing, not a mock: AuthService delegates its session
+        // reads and revocations here, and these tests assert on the Redis
+        // calls that come out the other side.
+        SessionsService,
         {
           provide: appConfig.KEY,
           useValue: {

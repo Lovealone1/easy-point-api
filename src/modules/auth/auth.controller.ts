@@ -109,9 +109,9 @@ export class AuthController {
   @RequireSessionScope(SessionScope.TENANT)
   @ApiBearerAuth()
   @ApiTags('Auth')
-  @ApiOperation({ summary: 'List Active Sessions', description: 'Returns a list of all active sessions/devices for the authenticated user.' })
-  async getSessions(@CurrentUser('sub') userId: string) {
-    return this.authService.getSessions(userId, SessionScope.TENANT);
+  @ApiOperation({ summary: 'List Active Sessions', description: 'Returns a list of all active sessions/devices for the authenticated user. The account-settings screen calls GET /me/sessions, which is the same data reached from the personal space.' })
+  async getSessions(@CurrentUser('sub') userId: string, @CurrentUser('sid') currentSid: string) {
+    return this.authService.getSessions(userId, SessionScope.TENANT, currentSid);
   }
 
   @Post('logout')

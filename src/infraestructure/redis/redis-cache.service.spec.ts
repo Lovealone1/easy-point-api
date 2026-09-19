@@ -11,6 +11,8 @@ describe('RedisCacheService', () => {
     del: jest.Mock;
     incr: jest.Mock;
     expire: jest.Mock;
+    set: jest.Mock;
+    ttl: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -20,6 +22,8 @@ describe('RedisCacheService', () => {
       del: jest.fn(),
       incr: jest.fn(),
       expire: jest.fn(),
+      set: jest.fn(),
+      ttl: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -73,6 +77,33 @@ describe('RedisCacheService', () => {
 
       await expect(service.decrIfPresent('quota')).resolves.toBe(0);
       expect(redis.del).toHaveBeenCalledWith('quota');
+    });
+  });
+
+  describe('setPreservingTtl', () => {
+    it('re-applies the remaining TTL instead of resetting it', async () => {
+      // A plain `set` would restart the clock, which for a session blob turns
+      // a 30-day session into a perpetual one every time it is touched.
+      redis.ttl.mockResolvedValue(1200);
+
+      await expect(service.setPreservingTtl('session', { a: 1 })).resolves.toBe(true);
+      expect(redis.set).toHaveBeenCalledWith('session', '{"a":1}', 'EX', 1200);
+    });
+
+    it('refuses to resurrect a key that has already expired', async () => {
+      // -2 is Redis for "no such key". Writing here would bring a session
+      // back from the dead, with no expiry at all.
+      redis.ttl.mockResolvedValue(-2);
+
+      await expect(service.setPreservingTtl('session', { a: 1 })).resolves.toBe(false);
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+
+    it('leaves a key with no expiry without one', async () => {
+      redis.ttl.mockResolvedValue(-1);
+
+      await expect(service.setPreservingTtl('session', { a: 1 })).resolves.toBe(true);
+      expect(redis.set).toHaveBeenCalledWith('session', '{"a":1}');
     });
   });
 });

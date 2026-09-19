@@ -57,6 +57,42 @@ export class RedisCacheService {
     return results.map(val => (val ? this.deserialize<T>(val) : null));
   }
 
+  /**
+   * Overwrites a key that already exists, leaving its expiry alone.
+   *
+   * The naive version — read, modify, `set` — resets the TTL, which for a
+   * session blob silently turns a 30-day session into an immortal one. The
+   * other naive version, `SET ... KEEPTTL`, has the opposite failure: if the
+   * key expired between the read and the write it is recreated with no expiry
+   * at all, which is worse.
+   *
+   * So the remaining TTL is read first and re-applied. `TTL` returning -2
+   * means the key is gone, and the write is skipped rather than resurrecting
+   * a session that Redis has already retired. There is still a millisecond
+   * window in which the key can expire between the two commands, but by then
+   * the TTL read is down to a second or less, so the resurrected key outlives
+   * the original by at most that.
+   *
+   * Returns false when there was nothing to update.
+   */
+  async setPreservingTtl(key: string, value: any): Promise<boolean> {
+    const ttlSeconds = await this.redisClient.ttl(key);
+
+    if (ttlSeconds === -2) {
+      return false;
+    }
+
+    const serializedValue = this.serialize(value);
+
+    if (ttlSeconds === -1) {
+      await this.redisClient.set(key, serializedValue);
+      return true;
+    }
+
+    await this.redisClient.set(key, serializedValue, 'EX', ttlSeconds);
+    return true;
+  }
+
   private serialize(value: any): string {
     return JSON.stringify(value);
   }

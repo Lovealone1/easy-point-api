@@ -9,6 +9,7 @@ import { AuthService } from './auth.service.js';
 import { RedisModule } from '../../infraestructure/redis/redis.module.js';
 import { MailService } from '../../infraestructure/mail/mail.service.js';
 import { InvitationsModule } from '../invitations/invitations.module.js';
+import { SessionsModule } from '../sessions/sessions.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,9 @@ import { InvitationsModule } from '../invitations/invitations.module.js';
       }),
     }),
     forwardRef(() => InvitationsModule),
+    // Owns reading and revoking sessions; AuthService delegates to it so there
+    // is one implementation of how a session is stored and torn down.
+    SessionsModule,
   ],
   // DevelopmentController exposes debug-only endpoints (plaintext OTP echo,
   // pending invitation tokens). It must not exist as a route at all outside
