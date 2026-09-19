@@ -233,6 +233,21 @@ describe('UsersService', () => {
   });
 
   describe('verifyEmailOtp', () => {
+    it('renders a production email-change code with the same 15-minute TTL stored in Redis', async () => {
+      (service as any).config.app.env = 'production';
+      repository.findById.mockResolvedValue(mockUserEntity);
+      repository.findByEmail.mockResolvedValue(null);
+      mailService.sendMail.mockResolvedValue(true);
+      await service.requestEmailOtp('user-123', { newEmail: 'new@example.com' });
+      expect(redisCacheService.set).toHaveBeenCalledWith('otp:CHANGE_EMAIL:user-123:new@example.com', expect.any(String), 900);
+      const html = mailService.sendMail.mock.calls[0][2];
+      expect(html).toContain('Confirm your new email address');
+      expect(html).toContain('Expires in 15 minutes');
+      expect(html).toMatch(/<p class="code">\d{6}<\/p>/);
+      expect(html).toContain('cid:easypoint-logo@easy-point');
+      expect(html).not.toContain('${');
+    });
+
     it('should throw BadRequestException if OTP is invalid or expired', async () => {
       repository.findById.mockResolvedValue(mockUserEntity);
       repository.findByEmail.mockResolvedValue(null);

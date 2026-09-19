@@ -1,3 +1,4 @@
+import { EMAIL_LOGO_SRC } from '../../infraestructure/mail/templates/email.utils.js';
 import {
   Injectable,
   Logger,
@@ -98,7 +99,7 @@ export class InvitationsService {
 
     if (organization && roleData) {
       const invitationLink = `${this.config.app.frontendUrl}/auth/invitation?token=${token}`;
-      const logoUrl = `${this.config.app.apiBaseUrl.replace(/\/api$/, '')}/easypoint-resumed.png`;
+      const logoUrl = EMAIL_LOGO_SRC;
       const htmlContent = getInvitationEmailTemplate(
         organization.name,
         roleData.name,

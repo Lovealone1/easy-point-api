@@ -1,3 +1,4 @@
+import { EMAIL_LOGO_SRC } from '../../infraestructure/mail/templates/email.utils.js';
 import { Inject, Injectable, Logger, ForbiddenException, UnauthorizedException, NotFoundException, HttpException, HttpStatus, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -30,7 +31,7 @@ export interface SessionMetadata {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  // Dynamic cooldown based on environment
+  // OTP validity; the same TTL is shown in the email.
   private getOtpTtlSeconds(): number {
     return this.config.app.env === 'production' ? 120 : 900;
   }
@@ -85,12 +86,13 @@ export class AuthService {
     const hashedOtp = await argon2.hash(newOtp);
 
     // Store the hash in Redis (overwriting any previous OTP for this intent/email)
-    await this.redisCacheService.set(cacheKey, hashedOtp, this.getOtpTtlSeconds());
+    const ttlSeconds = this.getOtpTtlSeconds();
+    await this.redisCacheService.set(cacheKey, hashedOtp, ttlSeconds);
 
     this.logger.log(`Generating new OTP for ${email} (${intent})`);
 
     if (!isDevMode) {
-      await this.sendOtpMail(email, intent, newOtp);
+      await this.sendOtpMail(email, intent, newOtp, ttlSeconds);
       return { message: 'OTP code sent via email' };
     }
 
@@ -531,10 +533,10 @@ export class AuthService {
     return crypto.randomInt(min, max).toString();
   }
 
-  private async sendOtpMail(email: string, intent: string, otp: string) {
+  private async sendOtpMail(email: string, intent: string, otp: string, ttlSeconds: number) {
     const subject = intent === 'LOGIN' ? 'Access Code - Easy Point' : 'Verify your registration on Easy Point';
-    const logoUrl = `${this.config.app.apiBaseUrl.replace(/\/api$/, '')}/easypoint-resumed.png`;
-    const html = getOtpEmailTemplate(otp, intent, logoUrl);
+    const logoUrl = EMAIL_LOGO_SRC;
+    const html = getOtpEmailTemplate(otp, intent, logoUrl, ttlSeconds);
 
     return this.mailService.sendMail(email, subject, html);
   }

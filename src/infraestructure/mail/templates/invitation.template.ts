@@ -1,3 +1,5 @@
+import { escapeHtml } from './email.utils.js';
+
 export function getInvitationEmailTemplate(
   organizationName: string,
   roleName: string,
@@ -145,7 +147,7 @@ export function getInvitationEmailTemplate(
   <div class="wrapper">
     <div class="main-container">
       <div class="header">
-        <img class="logo" src="\${logoUrl}" alt="Easy Point Logo" />
+        <img class="logo" src="${escapeHtml(logoUrl)}" alt="Easy Point Logo" />
         <h1>Easy Point</h1>
         <p>Organization Invitation</p>
       </div>
@@ -153,22 +155,22 @@ export function getInvitationEmailTemplate(
         <div class="badge">Invitation</div>
         <h2>You've been invited!</h2>
         <p class="description">
-          You have been invited to join <strong>\${organizationName}</strong> with the role of <strong>\${roleName}</strong>.<br>
+          You have been invited to join <strong>${escapeHtml(organizationName)}</strong> with the role of <strong>${escapeHtml(roleName)}</strong>.<br>
           Click the button below to accept your invitation and join the organization.
         </p>
         
         <div class="btn-container">
-          <a href="\${invitationLink}" class="btn">Accept Invitation</a>
+          <a href="${escapeHtml(invitationLink)}" class="btn">Accept Invitation</a>
         </div>
 
         <div class="link-container">
           <p>Or copy and paste this link into your browser:</p>
-          <a href="\${invitationLink}">\${invitationLink}</a>
+          <a href="${escapeHtml(invitationLink)}">${escapeHtml(invitationLink)}</a>
         </div>
       </div>
       <div class="footer">
         <p>If you don't know this organization, you can safely ignore this email.</p>
-        <p class="copyright">&copy; \${new Date().getFullYear()} Easy Point. All rights reserved.</p>
+        <p class="copyright">&copy; ${new Date().getFullYear()} Easy Point. All rights reserved.</p>
       </div>
     </div>
   </div>

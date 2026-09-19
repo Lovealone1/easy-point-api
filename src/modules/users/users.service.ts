@@ -1,3 +1,4 @@
+import { EMAIL_LOGO_SRC } from '../../infraestructure/mail/templates/email.utils.js';
 import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, Logger } from '@nestjs/common';
 import { UsersRepository } from './users.repository.js';
 import { UserEntity } from './domain/user.entity.js';
@@ -102,9 +103,10 @@ export class UsersService {
     const otp = crypto.randomInt(100000, 999999).toString();
     const hashedOtp = await argon2.hash(otp);
 
-    // Save hashed OTP in Redis with 15 mins expiry
+    // Use the same validity for Redis and the email.
+    const ttlSeconds = 900;
     const cacheKey = `otp:CHANGE_EMAIL:${id}:${newEmail}`;
-    await this.redisCacheService.set(cacheKey, hashedOtp, 900);
+    await this.redisCacheService.set(cacheKey, hashedOtp, ttlSeconds);
 
     const isDev = this.config.app.env !== 'production';
     if (isDev) {
@@ -114,8 +116,8 @@ export class UsersService {
 
     // Send email to newEmail
     const emailSubject = 'Confirmación de Cambio de Correo - Easy Point';
-    const logoUrl = `${this.config.app.apiBaseUrl.replace(/\/api$/, '')}/easypoint-resumed.png`;
-    const emailHtml = getOtpEmailTemplate(otp, 'CHANGE_EMAIL', logoUrl);
+    const logoUrl = EMAIL_LOGO_SRC;
+    const emailHtml = getOtpEmailTemplate(otp, 'CHANGE_EMAIL', logoUrl, ttlSeconds);
     await this.mailService.sendMail(newEmail, emailSubject, emailHtml);
 
     return { message: 'Verification OTP sent to new email' };

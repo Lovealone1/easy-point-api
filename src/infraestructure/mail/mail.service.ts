@@ -1,4 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { join } from 'node:path';
+import { EMAIL_LOGO_CID, EMAIL_LOGO_SRC } from './templates/email.utils.js';
+import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import nodemailer, { type SendMailOptions, type Transporter } from 'nodemailer';
 import appConfig from '../../common/config/config.js';
@@ -41,6 +43,15 @@ export class MailService {
       to,
       subject,
       html,
+      ...(html.includes(EMAIL_LOGO_SRC) ? {
+        attachments: [{
+          filename: 'easypoint-resumed.png',
+          path: join(process.cwd(), 'public', 'easypoint-resumed.png'),
+          cid: EMAIL_LOGO_CID,
+          contentType: 'image/png',
+          contentDisposition: 'inline' as const,
+        }],
+      } : {}),
     };
 
     try {
@@ -53,7 +64,7 @@ export class MailService {
         `Failed to send email to ${to}: ${mailError.message}`,
         mailError.stack,
       );
-      return false;
+      throw new ServiceUnavailableException('Email delivery failed. Please try again later.');
     }
   }
 }

@@ -1,3 +1,4 @@
+import { EMAIL_LOGO_SRC } from '../../infraestructure/mail/templates/email.utils.js';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { SubscriptionStatus } from '@prisma/client';
@@ -206,7 +207,7 @@ export class SubscriptionLifecycleService {
         return;
       }
 
-      const logoUrl = `${this.config.app.apiBaseUrl.replace(/\/api$/, '')}/easypoint-resumed.png`;
+      const logoUrl = EMAIL_LOGO_SRC;
       const renewalLink = `${this.config.app.frontendUrl}/dashboard/billing`;
       const formattedDate = renewalDate.toLocaleDateString('es-CO', {
         year: 'numeric',
@@ -228,8 +229,13 @@ export class SubscriptionLifecycleService {
         : `⚠️ Tu suscripción a ${planName} ha expirado — te quedan ${gracePeriodDays} días para renovar`;
 
       for (const email of recipients) {
-        await this.mailService.sendMail(email, subject, html);
-        this.logger.log(`Renewal reminder sent to ${email} for subscription ${subscriptionId}.`);
+        // One unreachable recipient must not cancel the remaining notices.
+        try {
+          await this.mailService.sendMail(email, subject, html);
+          this.logger.log(`Renewal reminder sent to ${email} for subscription ${subscriptionId}.`);
+        } catch (error: any) {
+          this.logger.error(`Failed to send renewal reminder to ${email} for subscription ${subscriptionId}`, error.stack);
+        }
       }
     } catch (error: any) {
       this.logger.error(`Failed to send renewal reminder emails for subscription ${subscriptionId}`, error.stack);
@@ -253,7 +259,7 @@ export class SubscriptionLifecycleService {
         return;
       }
 
-      const logoUrl = `${this.config.app.apiBaseUrl.replace(/\/api$/, '')}/easypoint-resumed.png`;
+      const logoUrl = EMAIL_LOGO_SRC;
       const reactivateLink = `${this.config.app.frontendUrl}/dashboard/billing`;
       const formattedDate = cancelledAt.toLocaleDateString('es-CO', {
         year: 'numeric',
@@ -272,8 +278,13 @@ export class SubscriptionLifecycleService {
       const subject = `Tu suscripción a ${planName} ha sido cancelada — Easy Point`;
 
       for (const email of recipients) {
-        await this.mailService.sendMail(email, subject, html);
-        this.logger.log(`Cancellation notice sent to ${email} for subscription ${subscriptionId}.`);
+        // One unreachable recipient must not cancel the remaining notices.
+        try {
+          await this.mailService.sendMail(email, subject, html);
+          this.logger.log(`Cancellation notice sent to ${email} for subscription ${subscriptionId}.`);
+        } catch (error: any) {
+          this.logger.error(`Failed to send cancellation notice to ${email} for subscription ${subscriptionId}`, error.stack);
+        }
       }
     } catch (error: any) {
       this.logger.error(`Failed to send cancellation emails for subscription ${subscriptionId}`, error.stack);
