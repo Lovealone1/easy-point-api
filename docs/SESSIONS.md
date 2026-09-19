@@ -108,6 +108,74 @@ throttles outbound mail rather than rationing sign-ins.
 Refunds go through `RedisCacheService.decrIfPresent`, which never creates the
 key and never resets its expiry; a plain `DECR` would do both.
 
+## Seeing where you are signed in
+
+Account settings reads its session list from `GET /me/sessions`, next to
+`/me/preferences` in the personal space. `GET /auth/sessions` is the same data
+under its older name and still works; both go through `SessionsService`.
+
+| | Route | Reaches |
+|---|---|---|
+| Account settings | `GET /me/sessions` | the caller's own sessions, in the application they are signed into |
+| | `DELETE /me/sessions/:sid` | one of them |
+| | `POST /me/sessions/revoke-others` | all of them but the current one |
+| Console | `GET /users/:userId/sessions` | one account's sessions, **both** applications |
+| | `DELETE /users/:userId/sessions/:sid` | one of them, whichever application it is in |
+| | `POST /users/:userId/sessions/revoke-all` | all of them, plus every refresh token |
+
+The personal-space routes are not pinned with `@RequireSessionScope`: both
+applications have an account-settings screen, and each correctly sees only its
+own sessions because the scope comes off the token. The console routes carry
+`@Roles(GlobalRole.ADMIN)`, which is what requires a console session — see
+"Where the boundary is actually enforced" above.
+
+The console's view is the one place that crosses the split on the read side.
+An administrator looking into an account needs both halves of it, and every
+revocation they perform is audited with them as the actor and the account as
+`metadata.targetUserId`.
+
+### What a row can tell you
+
+`SessionMetadata` in Redis holds the IP and the raw `User-Agent` recorded at
+sign-in, plus `lastSeenAt`. `describeUserAgent` turns the header into
+`device: { browser, os, type, label }` at **read** time, not at sign-in — so
+improving the parser improves every existing session's row without anyone
+signing back in, and a header it cannot place still renders as "Unknown
+device" rather than breaking the list.
+
+What a row cannot tell you: a city or a country. That needs a geo-IP database
+we do not ship. The IP is shown raw, which is what a user checking for an
+unfamiliar device actually needs.
+
+`lastSeenAt` is written by `JwtAuthGuard` on the request that notices it is
+more than five minutes stale, through `RedisCacheService.setPreservingTtl`.
+Two things that would each be a bug if done the obvious way:
+
+- a plain `set` resets the TTL, which would make any session that is in use
+  immortal — the 30-day expiry would never arrive;
+- `SET ... KEEPTTL` has the opposite failure, recreating a key with *no*
+  expiry if it lapsed between the read and the write.
+
+So the remaining TTL is read and re-applied, and a key that is already gone is
+left gone. The write is also never awaited: it is a convenience field on the
+hot path of every authenticated request, and a slow Redis must not turn into a
+failed request.
+
+Sessions minted before `lastSeenAt` existed simply do not have it, and readers
+fall back to `createdAt`. Nothing about this release signs anybody out.
+
+### Refresh-token rows outlive the sessions they belong to
+
+A `refresh_tokens` row carries no `sid`, so revoking one session cannot delete
+the specific row that pairs with it. This is safe rather than merely tolerated:
+`refreshToken()` checks Redis for the session before it rotates anything, so a
+row whose session is gone cannot be redeemed — it only waits out its own
+`expiresAt`. The two operations that *can* address them all —
+`POST /auth/logout-all` and the console's `revoke-all` — do delete every row.
+
+If that ever needs to be exact, the fix is to put the `sid` on the row rather
+than to try to guess which row belongs to which session.
+
 ## Adding a console endpoint
 
 Declare `@Roles(GlobalRole.ADMIN)` as before. Nothing else is needed — the

@@ -80,3 +80,30 @@ export function otpHourlyCountKey(scope: SessionScope, email: string): string {
  */
 export const ADMIN_ACCESS_DENIED =
   'This account is not authorized to access the administration console';
+
+/**
+ * What a live session carries in Redis, under `sessionMetadataKey`.
+ *
+ * `lastSeenAt` is optional on purpose: sessions minted before it existed have
+ * no value for it, and a deploy must not invalidate them. Readers fall back to
+ * `createdAt`, which is the honest answer for a session nobody has used since.
+ */
+export interface SessionMetadata {
+  sid: string;
+  ip: string;
+  userAgent: string;
+  createdAt: string;
+  /** Unix seconds. Kept as a number for backwards compatibility with clients. */
+  expiresAt: number;
+  lastSeenAt?: string;
+}
+
+/**
+ * How stale `lastSeenAt` is allowed to get before a request refreshes it.
+ *
+ * Every authenticated request already reads the session blob; writing it back
+ * on each one would turn a read-only guard into a write on the hot path. Five
+ * minutes is far finer than any "last active" label needs and costs at most
+ * one extra write per session per five minutes.
+ */
+export const LAST_SEEN_RESOLUTION_MS = 5 * 60 * 1000;

@@ -17,6 +17,7 @@ import {
   sessionMetadataKey,
   userSessionsKey,
 } from './session.constants.js';
+import { SessionsService } from '../sessions/sessions.service.js';
 import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.template.js';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { AuditService } from '../../infraestructure/audit/audit.service.js';
@@ -27,13 +28,10 @@ import * as argon2 from 'argon2';
 import { StorageService } from '../../infraestructure/storage/storage.service.js';
 import { resolveSubscriptionState } from '../organizations/domain/subscription-state.js';
 
-export interface SessionMetadata {
-  sid: string;
-  ip: string;
-  userAgent: string;
-  createdAt: string;
-  expiresAt: number;
-}
+// The shape itself now lives beside the Redis keys that hold it, in
+// session.constants.ts. Re-exported here so existing importers are unaffected.
+export type { SessionMetadata } from './session.constants.js';
+import type { SessionMetadata } from './session.constants.js';
 
 @Injectable()
 export class AuthService {
@@ -71,6 +69,7 @@ export class AuthService {
     private readonly invitationsService: InvitationsService,
     private readonly auditService: AuditService,
     private readonly storageService: StorageService,
+    private readonly sessionsService: SessionsService,
   ) { }
 
   async generateOtp(payload: GenerateOtpDto, isDevMode: boolean = false) {
@@ -473,33 +472,20 @@ export class AuthService {
 
 
 
-  async getSessions(userId: string, scope: SessionScope = SessionScope.TENANT) {
-    // Scoped to the application the caller is signed into: the dashboard has
-    // no business listing console sessions, or offering to kill them.
-    const sessionIds = await this.redisCacheService.smembers(userSessionsKey(scope, userId));
-    if (sessionIds.length === 0) return [];
-
-    const keys = sessionIds.map(sid => sessionMetadataKey(scope, userId, sid));
-    const sessions = await this.redisCacheService.mget<SessionMetadata>(keys);
-
-    // Filter out expired/null sessions and sort by creation
-    const expiredSids: string[] = [];
-    const activeSessions = sessions.filter((s, index) => {
-      if (s === null) {
-        expiredSids.push(sessionIds[index]);
-        return false;
-      }
-      return true;
-    }) as SessionMetadata[];
-
-    if (expiredSids.length > 0) {
-      // Clean up dead session IDs from the user's sessions set in Redis
-      await Promise.all(
-        expiredSids.map(sid => this.redisCacheService.srem(userSessionsKey(scope, userId), sid))
-      ).catch(err => this.logger.warn(`Failed to clean expired sessions: ${err.message}`));
-    }
-
-    return activeSessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  /**
+   * Scoped to the application the caller is signed into: the dashboard has no
+   * business listing console sessions, or offering to kill them.
+   *
+   * Kept here because `GET /auth/sessions` predates the account-settings
+   * module and the dashboard still calls it; both now go through the same
+   * implementation, and the richer shape it returns is strictly additive.
+   */
+  async getSessions(
+    userId: string,
+    scope: SessionScope = SessionScope.TENANT,
+    currentSid?: string,
+  ) {
+    return this.sessionsService.list(userId, scope, currentSid);
   }
 
   async logout(
@@ -510,10 +496,7 @@ export class AuthService {
   ) {
     // Only this application's session. Signing out of the console leaves the
     // dashboard signed in, and the reverse.
-    await Promise.all([
-      this.redisCacheService.delete(sessionMetadataKey(scope, userId, sessionId)),
-      this.redisCacheService.srem(userSessionsKey(scope, userId), sessionId),
-    ]);
+    await this.sessionsService.forget(userId, sessionId, scope);
 
     // Delete the refresh token from the DB if it was provided
     if (refreshTokenString) {
@@ -547,25 +530,7 @@ export class AuthService {
     // The one operation that deliberately crosses the split: "sign out
     // everywhere" is a panic button, and someone reaching for it means every
     // session they hold, dashboard and console alike.
-    let sessionCount = 0;
-
-    for (const scope of Object.values(SessionScope)) {
-      const setKey = userSessionsKey(scope, userId);
-      const sessionIds = await this.redisCacheService.smembers(setKey);
-      sessionCount += sessionIds.length;
-
-      const keysToDelete = sessionIds.map(sid => sessionMetadataKey(scope, userId, sid));
-      keysToDelete.push(setKey);
-
-      await Promise.all(keysToDelete.map(key => this.redisCacheService.delete(key)));
-    }
-
-    // Revoke all refresh tokens for this user in DB
-    await this.prismaService.refreshToken.deleteMany({
-      where: { userId }
-    });
-
-    this.logger.log(`User ${userId} logged out from every device and both applications`);
+    const sessionCount = await this.sessionsService.revokeAll(userId, userId);
 
     // Audit: logout all
     this.auditService.log({
@@ -586,30 +551,7 @@ export class AuthService {
   ) {
     // Scoped like getSessions: you may only kill sessions of the application
     // you are currently signed into, and only your own.
-    const sessionKey = sessionMetadataKey(scope, userId, sessionIdToKill);
-    const exists = await this.redisCacheService.get(sessionKey);
-
-    if (!exists) {
-      throw new NotFoundException(`Session with ID ${sessionIdToKill} not found`);
-    }
-
-    await Promise.all([
-      this.redisCacheService.delete(sessionKey),
-      this.redisCacheService.srem(userSessionsKey(scope, userId), sessionIdToKill),
-    ]);
-    this.logger.log(`Session ${sessionIdToKill} killed by user ${userId}`);
-
-    // Audit: session kill
-    this.auditService.log({
-      action: AuditAction.SESSION_KILL,
-      resourceType: 'Session',
-      resourceId: sessionIdToKill,
-      userId,
-      metadata: { killedSessionId: sessionIdToKill },
-      severity: AuditSeverity.CRITICAL,
-    });
-
-    return { message: 'Session terminated successfully' };
+    return this.sessionsService.revoke(userId, sessionIdToKill, scope, userId);
   }
 
   private async generateAuthTokens(

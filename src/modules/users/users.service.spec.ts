@@ -8,6 +8,9 @@ import { Order } from '../../common/pagination/page-options.dto.js';
 import { RedisCacheService } from '../../infraestructure/redis/redis-cache.service.js';
 import { MailService } from '../../infraestructure/mail/mail.service.js';
 import appConfig from '../../common/config/config.js';
+import { SessionsService } from '../sessions/sessions.service.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { AuditService } from '../../infraestructure/audit/audit.service.js';
 import * as argon2 from 'argon2';
 
 describe('UsersService', () => {
@@ -15,6 +18,7 @@ describe('UsersService', () => {
   let repository: jest.Mocked<UsersRepository>;
   let redisCacheService: jest.Mocked<any>;
   let mailService: jest.Mocked<any>;
+  let prismaService: jest.Mocked<any>;
 
   const mockUserRaw = {
     id: 'user-123',
@@ -45,11 +49,18 @@ describe('UsersService', () => {
       get: jest.fn(),
       set: jest.fn(),
       delete: jest.fn(),
-      smembers: jest.fn(),
+      smembers: jest.fn().mockResolvedValue([]),
+      srem: jest.fn(),
+      mget: jest.fn().mockResolvedValue([]),
     };
 
     const mockMailService = {
       sendMail: jest.fn(),
+    };
+
+    const mockPrismaService = {
+      user: { findUnique: jest.fn() },
+      refreshToken: { deleteMany: jest.fn() },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -67,6 +78,17 @@ describe('UsersService', () => {
           provide: MailService,
           useValue: mockMailService,
         },
+        // Real, not mocked: the point of the assertions below is which Redis
+        // keys an email change actually reaches.
+        SessionsService,
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn() },
+        },
         {
           provide: appConfig.KEY,
           useValue: {
@@ -82,6 +104,7 @@ describe('UsersService', () => {
     repository = module.get(UsersRepository) as any;
     redisCacheService = module.get(RedisCacheService) as any;
     mailService = module.get(MailService) as any;
+    prismaService = module.get(PrismaService) as any;
   });
 
   it('should be defined', () => {
@@ -273,6 +296,28 @@ describe('UsersService', () => {
       expect(result.email).toBe('new@example.com');
       expect(redisCacheService.delete).toHaveBeenCalled();
       expect(repository.update).toHaveBeenCalledWith('user-123', { email: 'new@example.com' });
+    });
+
+    it('signs the account out of both applications, in the namespaces actually in use', async () => {
+      // The address is baked into the JWT payload, so any surviving session
+      // would keep presenting the old one. This assertion is here because the
+      // previous implementation built the Redis keys inline and was left
+      // addressing the pre-split namespace when the scopes were introduced —
+      // it deleted nothing, and nobody noticed.
+      repository.findById.mockResolvedValue(mockUserEntity);
+      repository.findByEmail.mockResolvedValue(null);
+      redisCacheService.get.mockResolvedValue(await argon2.hash('123456'));
+      redisCacheService.smembers.mockResolvedValue(['session-a']);
+      repository.update.mockResolvedValue(mockUserEntity as any);
+
+      await service.verifyEmailOtp('user-123', { newEmail: 'new@example.com', otp: '123456' });
+
+      const deleted = redisCacheService.delete.mock.calls.map((call: unknown[]) => String(call[0]));
+      expect(deleted).toContain('session_metadata:TENANT:user-123:session-a');
+      expect(deleted).toContain('session_metadata:ADMIN:user-123:session-a');
+      expect(prismaService.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-123' },
+      });
     });
   });
 });

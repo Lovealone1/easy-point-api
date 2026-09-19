@@ -15,6 +15,7 @@ import { getOtpEmailTemplate } from '../../infraestructure/mail/templates/otp.te
 import { Prisma } from '@prisma/client';
 import type { ConfigType } from '@nestjs/config';
 import appConfig from '../../common/config/config.js';
+import { SessionsService } from '../sessions/sessions.service.js';
 import crypto from 'crypto';
 import * as argon2 from 'argon2';
 
@@ -26,6 +27,7 @@ export class UsersService {
     private readonly usersRepository: UsersRepository,
     private readonly redisCacheService: RedisCacheService,
     private readonly mailService: MailService,
+    private readonly sessionsService: SessionsService,
     @Inject(appConfig.KEY)
     private readonly config: ConfigType<typeof appConfig>,
   ) {}
@@ -143,14 +145,16 @@ export class UsersService {
     // OTP verified: delete code
     await this.redisCacheService.delete(cacheKey);
 
-    // Force sign out from all sessions to prevent JWT payload inconsistency
-    const sessionIds = await this.redisCacheService.smembers(`user_sessions:${id}`);
-    if (sessionIds.length > 0) {
-      const keysToDelete = sessionIds.map(sid => `session_metadata:${id}:${sid}`);
-      keysToDelete.push(`user_sessions:${id}`);
-      await Promise.all(keysToDelete.map(key => this.redisCacheService.delete(key)));
-    }
-    await this.usersRepository.revokeRefreshTokens(id);
+    // Force sign out from every session, in both applications: the address
+    // is baked into the JWT payload, so a session minted under the old one
+    // would keep presenting it.
+    //
+    // This used to build the Redis keys inline, and kept doing so after the
+    // dashboard and the console were given separate namespaces — which meant
+    // it had been addressing keys nobody writes any more, and an email change
+    // silently left every session alive. Delegating is what stops that from
+    // happening again. `revokeAll` also drops the refresh tokens.
+    await this.sessionsService.revokeAll(id, id);
 
     // Update email in DB
     return this.usersRepository.update(id, { email: newEmail });

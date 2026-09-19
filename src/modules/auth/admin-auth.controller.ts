@@ -133,8 +133,8 @@ export class AdminAuthController {
   @ApiBearerAuth()
   @ApiTags('Auth')
   @ApiOperation({ summary: 'List active console sessions', description: 'Console sessions only — dashboard sessions are listed by GET /auth/sessions.' })
-  async getSessions(@CurrentUser('sub') userId: string) {
-    return this.authService.getSessions(userId, SessionScope.ADMIN);
+  async getSessions(@CurrentUser('sub') userId: string, @CurrentUser('sid') currentSid: string) {
+    return this.authService.getSessions(userId, SessionScope.ADMIN, currentSid);
   }
 
   @Post('logout')
