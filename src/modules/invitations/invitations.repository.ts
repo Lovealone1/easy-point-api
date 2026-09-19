@@ -32,17 +32,23 @@ export class InvitationsRepository {
   }
 
   async findByToken(token: string): Promise<InvitationWithOrg | null> {
-    return this.prisma.invitation.findUnique({
-      where: { token },
-      include: {
-        organization: {
-          select: { id: true, name: true },
+    // Looked up by an invitee who is not a member yet, so there is no tenant to
+    // publish — but the included `role` lives in an RLS-protected table and
+    // would come back null, which callers type as non-nullable. This is the
+    // control-plane read the bypass escape hatch exists for.
+    return this.prisma.$systemTransaction((tx) =>
+      tx.invitation.findUnique({
+        where: { token },
+        include: {
+          organization: {
+            select: { id: true, name: true },
+          },
+          role: {
+            select: { name: true },
+          },
         },
-        role: {
-          select: { name: true },
-        },
-      },
-    });
+      }),
+    );
   }
 
   async findByEmailAndOrg(
@@ -73,18 +79,23 @@ export class InvitationsRepository {
   }
 
   async findMany(organizationId: string): Promise<InvitationWithOrg[]> {
-    return this.prisma.invitation.findMany({
-      where: { organizationId },
-      include: {
-        organization: {
-          select: { id: true, name: true },
+    // Same reason as `create`: `Invitation` is tenant-exempt, but the included
+    // `role` is not. Without the tenant published, RLS hides every joined role
+    // and each invitation comes back with `role: null`.
+    return this.prisma.$tenantTransaction((tx) =>
+      tx.invitation.findMany({
+        where: { organizationId },
+        include: {
+          organization: {
+            select: { id: true, name: true },
+          },
+          role: {
+            select: { name: true },
+          },
         },
-        role: {
-          select: { name: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
   }
 
   async findById(id: string): Promise<Invitation | null> {
