@@ -5,6 +5,7 @@ import { SubscriptionAccessGuard } from './common/guards/subscription-access.gua
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
+import { AccountModule } from './modules/account/account.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { OrganizationUsersModule } from './modules/organization-users/organization-users.module.js';
 import { InvitationsModule } from './modules/invitations/invitations.module.js';
@@ -92,6 +93,7 @@ import { UserSubscriptionCategoriesModule } from './modules/user-subscription-ca
     // ── Feature modules ───────────────────────────────────────────────────
     AuthModule,
     SessionsModule,
+    AccountModule,
     OrganizationsModule,
     OrganizationConfigsModule,
     OrganizationUsersModule,
