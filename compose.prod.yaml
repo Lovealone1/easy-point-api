@@ -56,7 +56,28 @@ services:
   social-redis:
     restart: always
     ports: !reset []
-    command: redis-server --requirepass ${REDIS_PASSWORD} --logLevel warning --appendonly yes
+    # --appendonly yes is what makes sessions survive Redis itself restarting:
+    # the AOF in the redis_data volume is replayed on boot. Without it, only
+    # the periodic RDB snapshot survives and anything since it is lost.
+    #
+    # --maxmemory sits below the 256M container limit on purpose. With no
+    # ceiling Redis grows until the kernel kills the container, which turns a
+    # gradual problem into an abrupt one; and the limit has to leave room for
+    # an AOF rewrite, which forks and can briefly double the resident set.
+    #
+    # --maxmemory-policy noeviction is the important half. Every eviction
+    # policy that touches keys with a TTL would evict live sessions, silently
+    # signing people out under memory pressure. noeviction fails writes
+    # instead, which is loud and recoverable. It is also unreachable in
+    # practice: a session blob is a few hundred bytes, so 160MB is on the
+    # order of a million of them.
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --logLevel warning
+      --appendonly yes
+      --maxmemory 160mb
+      --maxmemory-policy noeviction
     deploy:
       resources:
         limits:

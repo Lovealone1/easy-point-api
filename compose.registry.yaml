@@ -1,0 +1,38 @@
+# Deploy override: run images built by CI instead of building on the VPS.
+#
+#   docker compose -f compose.yaml -f compose.prod.yaml -f compose.registry.yaml ...
+#
+# Layered on top of compose.prod.yaml, never instead of it. Two reasons this
+# exists as a third file rather than as edits to the other two:
+#
+#   - the build path still has to work. `compose.yaml` + `compose.prod.yaml`
+#     alone must remain a stack you can bring up from a clone on a laptop, or
+#     the pipeline becomes the only way to run anything;
+#   - the server never builds. A 2 vCPU box compiling TypeScript and installing
+#     node_modules is several minutes of the API being under memory pressure,
+#     during a window when it is also being restarted.
+#
+# `API_IMAGE` and `MIGRATE_IMAGE` are exported by deploy/deploy.sh. They are
+# required, not defaulted: an unset image silently falling back to `latest` is
+# how a rollback quietly redeploys the thing it was rolling back from.
+
+services:
+  easy-point-api:
+    image: ${API_IMAGE:?API_IMAGE must be set — deploy through deploy/deploy.sh}
+    # Clears the build context inherited from compose.yaml/compose.prod.yaml.
+    # With both `image` and `build` present, `docker compose up` builds when
+    # the tag is missing locally instead of pulling it, which is exactly the
+    # on-server build this file exists to avoid.
+    build: !reset null
+    # `missing`, not `always`. deploy.sh pulls explicitly as its first step, so
+    # `up` never needs the registry — which is what makes a rollback work when
+    # the registry is the thing having the outage: the old image is still in
+    # the local cache, and `always` would insist on re-fetching it.
+    pull_policy: missing
+
+  # The Prisma CLI is not in the runtime image (see the note in Dockerfile), so
+  # migrations run from the `build` stage, published by CI under its own tag.
+  migrate:
+    image: ${MIGRATE_IMAGE:?MIGRATE_IMAGE must be set — deploy through deploy/deploy.sh}
+    build: !reset null
+    pull_policy: missing

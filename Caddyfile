@@ -21,6 +21,28 @@
 	reverse_proxy easy-point-api:3001 {
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Forwarded-Proto {scheme}
+
+		# A deploy replaces the API container, so for the seconds it takes the
+		# new one to boot there is nothing listening. Without this, every
+		# request in that window is a 502 the user sees.
+		#
+		# lb_try_duration makes Caddy keep retrying a request that could not be
+		# dispatched, instead of failing it, so the requests arriving mid-deploy
+		# are held and then served. It only ever retries requests that never
+		# reached an upstream, so a POST cannot be applied twice.
+		#
+		# The cost is the opposite case: when the API is genuinely down, a
+		# client waits this long before being told. 30s is chosen against a
+		# boot that takes 5-15s, with the deploy script rolling back anything
+		# slower than that.
+		lb_try_duration 30s
+		lb_try_interval 500ms
+
+		# Deliberately no active health checks. With a single upstream they
+		# only add a blind spot — a container that is already serving stays
+		# marked down until the next probe — and the dial-time retry above
+		# recovers the instant the new container listens. Add health_uri
+		# /api/v1/health/ready here if this is ever scaled past one replica.
 	}
 
 	log {

@@ -37,7 +37,8 @@ export class SubscriptionLifecycleService {
 
   /**
    * Moves active subscriptions whose current period ends today or in the past into EXPIRED.
-   * Free and already cancelled/expired subscriptions are excluded.
+   * Already cancelled/expired subscriptions are excluded; FREE ones are not —
+   * see the note on the query below.
    * Also sends a renewal reminder email to the organization email and owner.
    */
   async expireDueSubscriptions() {
