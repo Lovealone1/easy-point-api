@@ -1,0 +1,101 @@
+# Standalone deployment: docker compose -f compose.cloudsql.yaml ...
+# Do not combine with compose.yaml or compose.prod.yaml.
+# PostgreSQL and its backups are managed in Cloud SQL. Set DATABASE_URL to
+# the restricted runtime role and DIRECT_URL to the migration/schema owner.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  easy-point-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for the Cloud SQL app role}
+      DIRECT_URL: ${DIRECT_URL:?Set DIRECT_URL for the Cloud SQL migration role}
+      REDIS_ENABLED: "true"
+      REDIS_HOST: social-redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    depends_on:
+      social-redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 768M
+    logging: *logging
+
+  social-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --maxmemory-policy
+      - noeviction
+      - --loglevel
+      - warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      easy-point-api:
+        condition: service_healthy
+    logging: *logging
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: build
+    profiles: [migrate]
+    environment:
+      DATABASE_URL: ${DIRECT_URL:?Set DIRECT_URL for the Cloud SQL migration role}
+      DIRECT_URL: ${DIRECT_URL:?Set DIRECT_URL for the Cloud SQL migration role}
+    command: ["pnpm", "prisma:deploy"]
+    logging: *logging
+
+volumes:
+  redis_data:
+  caddy_data:
+  caddy_config:
