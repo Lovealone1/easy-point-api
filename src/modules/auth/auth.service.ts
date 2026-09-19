@@ -159,7 +159,12 @@ export class AuthService {
       return { message: 'OTP code sent via email' };
     }
 
-    return this.generateOtp({ email, intent: AuthIntent.ADMIN_LOGIN }, false);
+    // In development the code is logged instead of emailed, matching how the
+    // dashboard flow behaves through DevelopmentController. generateOtp
+    // refuses dev mode outside a development environment, so this cannot leak
+    // into production.
+    const isDevMode = this.config.app.env === 'development';
+    return this.generateOtp({ email, intent: AuthIntent.ADMIN_LOGIN }, isDevMode);
   }
 
   async verifyOtp(payload: VerifyOtpDto) {

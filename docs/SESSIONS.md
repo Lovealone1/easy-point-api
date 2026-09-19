@@ -77,6 +77,18 @@ both are load-bearing:
 The migration adds `refresh_tokens.scope` defaulting to `TENANT`. Existing rows
 are correct under that default and are revoked on the next sign-in anyway.
 
+## The console intent is server-chosen
+
+`AuthIntent.ADMIN_LOGIN` is not in `CLIENT_REQUESTABLE_INTENTS`, so the public
+`/auth/otp` routes reject it. Only `AdminAuthController` sets it, and only
+after `generateAdminOtp` has confirmed the address belongs to an active global
+administrator.
+
+Without that restriction, anyone could ask the public route to email an
+"administration console access" code to any address. It would not grant them
+anything — verification still demands the ADMIN role — but it would hand a
+stranger a convincing phishing lure sent over our own SMTP.
+
 ## Adding a console endpoint
 
 Declare `@Roles(GlobalRole.ADMIN)` as before. Nothing else is needed — the
