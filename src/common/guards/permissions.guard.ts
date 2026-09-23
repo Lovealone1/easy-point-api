@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { REQUIRE_PERMISSION_KEY } from '../decorators/require-permission.decorator.js';
+import { REQUIRE_IMPORT_PERMISSION_KEY } from '../decorators/require-import-permission.decorator.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GlobalRole, OrganizationStatus } from '@prisma/client';
 import { Role } from '../enums/role.enum.js';
@@ -40,17 +41,22 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredKeys = this.reflector.getAllAndOverride<string[]>(
+    const request = context.switchToHttp().getRequest();
+    let requiredKeys = this.reflector.getAllAndOverride<string[]>(
       REQUIRE_PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
+
+    if (this.reflector.getAllAndOverride<boolean>(REQUIRE_IMPORT_PERMISSION_KEY, [context.getHandler(), context.getClass()])) {
+      const resource = String(request.params?.resource ?? '').replace(/-/g, '_');
+      requiredKeys = [`${resource}:create`];
+    }
 
     // Si no hay @RequirePermission en el endpoint, se permite (guard no aplica)
     if (!requiredKeys || requiredKeys.length === 0) {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
     const user = request.user;
 
     if (!user) {

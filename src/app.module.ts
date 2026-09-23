@@ -65,6 +65,7 @@ import { CurrenciesModule } from './modules/currencies/currencies.module.js';
 import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module.js';
 import { UserPreferencesModule } from './modules/user-preferences/user-preferences.module.js';
 import { UserSubscriptionCategoriesModule } from './modules/user-subscription-categories/user-subscription-categories.module.js';
+import { ImportsModule } from './modules/imports/imports.module.js';
 
 @Module({
   imports: [
@@ -140,6 +141,7 @@ import { UserSubscriptionCategoriesModule } from './modules/user-subscription-ca
     ExchangeRatesModule,
     UserPreferencesModule,
     UserSubscriptionCategoriesModule,
+    ImportsModule,
   ],
   controllers: [],
   providers: [
