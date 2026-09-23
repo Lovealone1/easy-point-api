@@ -1765,3 +1765,23 @@ model ExchangeRateSnapshot {
   @@index([baseCurrency])
   @@map("exchange_rate_snapshots")
 }
+
+/// Idempotency and audit record for a master-data import.
+model ImportRecord {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String?
+  resource       String
+  fileHash       String
+  idempotencyKey String
+  status         String   @default("COMPLETED")
+  totalRows      Int
+  createdRows    Int
+  result         Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, resource, idempotencyKey])
+  @@index([organizationId, resource, createdAt])
+  @@map("import_records")
+}

@@ -51,12 +51,17 @@ export const TENANT_AWARE_MODELS: ReadonlySet<string> = new Set([
  *                    global admins.
  *
  * These still filter by `organizationId` explicitly in their services.
+ * `ImportRecord` is an audit/idempotency ledger introduced after the original
+ * RLS migration; its import service always supplies the organization filter
+ * explicitly and it is intentionally kept out of automatic ORM scoping until
+ * the next consolidated RLS migration.
  */
 export const TENANT_EXEMPT_MODELS: ReadonlySet<string> = new Set([
   'Invitation',
   'Subscription',
   'Invoice',
   'OrganizationModule',
+  'ImportRecord',
 ]);
 
 /** Operations whose `where` clause should be constrained to the tenant. */

@@ -131,6 +131,7 @@ export class PrismaService
     // would (correctly) return zero rows.
     finalClient.$tenantTransaction = async function <T>(
       fn: (tx: Prisma.TransactionClient) => Promise<T>,
+      options?: { timeout?: number; maxWait?: number },
     ): Promise<T> {
       return this.$transaction(async (tx: Prisma.TransactionClient) => {
         const ctx = getTenantContext();
@@ -144,7 +145,7 @@ export class PrismaService
         // Everything inside now runs with the tenant already published, so the
         // extension must not wrap each query in yet another transaction.
         return runWithGucApplied(() => fn(tx));
-      });
+      }, options);
     };
 
     // Escape hatch for control-plane work that legitimately spans tenants:
@@ -178,6 +179,7 @@ export class PrismaService
    */
   declare $tenantTransaction: <T>(
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: { timeout?: number; maxWait?: number },
   ) => Promise<T>;
 
   /**
